@@ -5,12 +5,6 @@ open System.Text.Json
 open System.Threading
 open System.Text
 
-//TODO:
-//Utilize Result types for handling errors
-//Introduce error handling
-//Define Polygon message types and introduce a message processing function
-//Improve encapsulation in the code
-
 type CryptoTrade = {
     price: decimal
     size: decimal
@@ -49,20 +43,17 @@ let createCache() = { LastTrades = Map.empty }
 let mutable currentCache = createCache()
 
 //Define a function to connect to the WebSocket
-let connectToWebSocket (uri: Uri) =
-        async {
-            try
-                let wsClient = new ClientWebSocket()
-                //Convert a .NET task into an async workflow
-                //Run an asynchronous computation in a non-blocking way
-                do! Async.AwaitTask (wsClient.ConnectAsync(uri, CancellationToken.None))
-                //Returning Websockets instance from async workflow
-                return wsClient
-            with
-            | ex -> return Error (ConnectionFailed ex.Message)
-        }
+let connectToWebSocket (uri: Uri) : Async<Result<ClientWebSocket, WebSocketError>> =
+    async {
+        try
+            let wsClient = new ClientWebSocket()
+            do! Async.AwaitTask (wsClient.ConnectAsync(uri, CancellationToken.None))
+            return Ok wsClient
+        with
+        | ex -> return Error (ConnectionFailed ex.Message)
+    }
 
-let processMessage (message: string) : Result<CryptoTrade option, WebSocketError> =
+let processMessage (message: string) (tradingParams: TradingParameters) : unit =
     try
         let msg = JsonSerializer.Deserialize<PolygonMessage>(message)
         match msg.ev with
@@ -83,9 +74,8 @@ let processMessage (message: string) : Result<CryptoTrade option, WebSocketError
                 printfn "Potential trading opportunity found for %s at price %M" msg.pair trade.price
         | _ -> ()
     with
-    | ex -> Error (InvalidMessage ex.Message)
-        
-// WebSocket connection and message handling
+    | ex -> printfn "Error processing message: %s" ex.Message
+
 let rec receiveData (wsClient: ClientWebSocket) (tradingParams: TradingParameters) = 
     async {
         let buffer = Array.zeroCreate 10024
@@ -105,15 +95,6 @@ let rec receiveData (wsClient: ClientWebSocket) (tradingParams: TradingParameter
         with
         | ex -> printfn "Error receiving data: %s" ex.Message
     }
-    
-// Connect and subscribe to market data
-let connectToWebSocket (uri: Uri) =
-    async {
-        let wsClient = new ClientWebSocket()
-        do! wsClient.ConnectAsync(uri, CancellationToken.None) |> Async.AwaitTask
-        return wsClient
-    }
-
 
 let sendMessage (wsClient: ClientWebSocket) (message: string) =
     let messageBytes = Encoding.UTF8.GetBytes(message)
@@ -129,22 +110,25 @@ let sendMessage (wsClient: ClientWebSocket) (message: string) =
 let startMarketDataFeed (apiKey: string) (pairs: string list) (tradingParams: TradingParameters) =
     async {
         let uri = Uri("wss://socket.polygon.io/crypto")
-        let! wsClient = connectToWebSocket uri
+        let! wsClientResult = connectToWebSocket uri
         
-        // Authenticate
-        let authMsg = sprintf """{"action":"auth","params":"%s"}""" apiKey
-        sendMessage wsClient authMsg
-        
-        // Subscribe to pairs
-        let pairsStr = String.concat "," pairs
-        let subMsg = sprintf """{"action":"subscribe","params":"%s"}""" pairsStr
-        sendMessage wsClient subMsg
-        
-        // Start receiving data
-        do! receiveData wsClient tradingParams
+        match wsClientResult with
+        | Ok wsClient ->
+            // Authenticate
+            let authMsg = sprintf """{"action":"auth","params":"%s"}""" apiKey
+            sendMessage wsClient authMsg
+            
+            // Subscribe to pairs
+            let pairsStr = String.concat "," pairs
+            let subMsg = sprintf """{"action":"subscribe","params":"%s"}""" pairsStr
+            sendMessage wsClient subMsg
+            
+            // Start receiving data
+            do! receiveData wsClient tradingParams
+        | Error err ->
+            printfn "Failed to connect: %A" err
     }
 
-         
 [<EntryPoint>]
 let main args =
     let tradingParams = {
@@ -155,7 +139,7 @@ let main args =
     }
     let uri = Uri("wss://socket.polygon.io/crypto")
     let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
-    let subscriptionParameters = ["XT.BTC-USD"]
-    startMarketDataFeed apiKey pairs tradingParams 
+    let subscriptionParams = ["XT.BTC-USD"]
+    startMarketDataFeed apiKey subscriptionParams tradingParams 
     |> Async.RunSynchronously
     0
