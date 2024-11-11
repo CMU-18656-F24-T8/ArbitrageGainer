@@ -7,11 +7,15 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Include="annualizedReturnCalculate.fs" />
+    <Compile Include="ExchangeDataParser.fs" />
+    <Compile Include="retrieveCrossTradedPair.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Azure.Data.Tables" Version="12.9.1" />
+    <PackageReference Include="FSharp.Data" Version="6.4.0" />
     <PackageReference Include="Microsoft.Azure.Cosmos.Table" Version="1.0.8" />
     <PackageReference Include="Suave" Version="2.6.2" />
   </ItemGroup>

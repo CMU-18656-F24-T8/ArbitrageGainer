@@ -9,6 +9,9 @@ open Suave.Successful
 open Suave.RequestErrors
 open Newtonsoft.Json
 
+
+open RetrieveCrossTradedPair
+open AnnualizedReturnCalculate
 // TYPE DEFINITIONS
 
 type TradingStrategy =
@@ -267,11 +270,14 @@ let main argv =
 
     let app =
         choose
-            [ POST >=> path "/trading_strategy" >=> setTradingStrategyHandler table
+            [
+              POST >=> path "/trading_strategy" >=> setTradingStrategyHandler table
               GET >=> path "/trading_strategy" >=> getTradingStrategyHandler table
               POST >=> path "/email" >=> setEmailHandler table
               GET >=> path "/email" >=> getEmailHandler table
-              PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler table ]
-
+              PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler table 
+              GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
+              POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
+            ]
     startWebServer defaultConfig app
     0

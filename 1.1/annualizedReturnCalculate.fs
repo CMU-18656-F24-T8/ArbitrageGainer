@@ -1,3 +1,5 @@
+module AnnualizedReturnCalculate
+
 open System
 open Suave
 open Suave.Filters
@@ -60,10 +62,3 @@ let calculateAnnualizedReturnHandler =
             | 400 -> BAD_REQUEST error.Message
             | _ -> ServerErrors.INTERNAL_ERROR error.Message)
 
-[<EntryPoint>]
-let main argv =
-    let app =
-        choose [ POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler ]
-
-    startWebServer defaultConfig app
-    0
