@@ -1,4 +1,4 @@
-﻿module RealtimeDataSocket
+﻿module Controller.RealtimeDataSocket
 
 open System
 open System.Net

@@ -1,19 +1,15 @@
-﻿module RetrieveCrossTradedPair
+﻿module Controller.RetrieveCrossTradedPair
 
+open Azure.Data.Tables
 open Microsoft.FSharp.Collections
 open Microsoft.FSharp.Core
+open Newtonsoft.Json
 open Suave
 open System.Net.Http
-open Azure.Data.Tables
-open Azure
-open Suave.Filters
-open Suave.Operators
-open Suave.Successful
 open Suave.RequestErrors
-open Newtonsoft.Json
 open FSharp.Data
-open System.IO
-open ExchangeDataParser
+
+open Util.ExchangeDataParser
 
 let httpClient = new HttpClient()
 
@@ -21,7 +17,6 @@ type WebError =
     | HttpError of string
     | ParsingError of string
     | DatabaseError of string
-    
     
     
 let fetchData (url:string) (fetcher: JsonValue -> (string * string) array) () =
@@ -84,8 +79,8 @@ let fetchAllCrossTradedExchangeData ()=
 
 let retrieveCrossTradedPairsHandler (ctx: HttpContext) : Async<HttpContext option> = 
     async {
-        let! task = fetchAllCrossTradedExchangeData () 
+        let! task = fetchAllCrossTradedExchangeData ()
         match task with
-        | Ok pairs-> return! Successful.OK "Success" ctx
+        | Ok pairs-> return! Successful.OK (JsonConvert.SerializeObject(pairs)) ctx
         | Error err -> return! BAD_REQUEST "Error" ctx
     }

@@ -1,4 +1,4 @@
-﻿module ExchangeDataParser
+﻿module Util.ExchangeDataParser
 
 open FSharp.Data
 

@@ -7,10 +7,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="annualizedReturnCalculate.fs" />
-    <Compile Include="ExchangeDataParser.fs" />
-    <Compile Include="retrieveCrossTradedPair.fs" />
-    <Compile Include="realtimeDataSocket.fs" />
+    <Compile Include="Util\ExchangeDataParser.fs" />
+    <Compile Include="Controller\realtimeDataSocket.fs" />
+    <Compile Include="Controller\retrieveCrossTradedPair.fs" />
+    <Compile Include="Controller\annualizedReturnCalculate.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
