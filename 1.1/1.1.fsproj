@@ -10,6 +10,7 @@
     <Compile Include="annualizedReturnCalculate.fs" />
     <Compile Include="ExchangeDataParser.fs" />
     <Compile Include="retrieveCrossTradedPair.fs" />
+    <Compile Include="realtimeDataSocket.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
