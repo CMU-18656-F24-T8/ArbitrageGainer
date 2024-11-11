@@ -1,4 +1,4 @@
-module AnnualizedReturnCalculate
+module Controller.AnnualizedReturnCalculate
 
 open System
 open Suave

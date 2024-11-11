@@ -1,4 +1,5 @@
 ﻿open System
+open System.Net.Http
 open Microsoft.FSharp.Core
 open Suave
 open Azure.Data.Tables
@@ -9,9 +10,10 @@ open Suave.Successful
 open Suave.RequestErrors
 open Newtonsoft.Json
 
+open Controller.RetrieveCrossTradedPair
+open Controller.AnnualizedReturnCalculate
+open Controller.RealtimeDataSocket
 
-open RetrieveCrossTradedPair
-open AnnualizedReturnCalculate
 // TYPE DEFINITIONS
 
 type TradingStrategy =
@@ -267,7 +269,7 @@ let main argv =
 
     let tableName = "functional_m2_1_table"
     let table = connectToTable connectionString tableName
-
+    let httpClient = new HttpClient()
     let app =
         choose
             [
