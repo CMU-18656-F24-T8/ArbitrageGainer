@@ -21,6 +21,9 @@ Fetches and processes trading pairs from multiple exchanges:
 - Bitfinex: `https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange`
 - Bitstamp: `https://www.bitstamp.net/api/v2/ticker/`
 - Kraken: `https://api.kraken.com/0/public/AssetPairs`
+  ### Endpoints:
+ - "GET /crosstraded" -> return a list of cross traded string
+
 Identifies and stores cross-traded pairs in format: `currency1Symbol-currency2symbol`.  
 ### 1.3 Real-time Market Data Management
 **Location**: `./1.3/RealTimeDataSocket.fs`  
@@ -29,8 +32,6 @@ Implements WebSocket connection to Polygon.io API for real-time crypto data:
 - Maintains price cache for different exchanges
 - Processes real-time trade events
 - Evaluates trading opportunities based on configured parameters  
-### Endpoints:
- - "GET /crosstraded" -> return a list of cross traded string
 
 ### 1.4 Annualized Return Metric Calculation
 **Location**: `./1.1/annualizedReturnCalculate.fs`  
