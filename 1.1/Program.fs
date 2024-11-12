@@ -259,7 +259,8 @@ let getEmailHandler (table: TableClient) =
             match error.Code with
             | 404 -> NOT_FOUND error.Message
             | _ -> ServerErrors.INTERNAL_ERROR error.Message)
-
+let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
+let pairs = ["XQ.BTC-USD"]  
 // SERVER SETUP
 
 [<EntryPoint>]
@@ -280,6 +281,7 @@ let main argv =
               PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler table 
               GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
               POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
+              GET >=> path "/realtime" >=> realtimeDataFeedBeginController 
             ]
     startWebServer defaultConfig app
     0
