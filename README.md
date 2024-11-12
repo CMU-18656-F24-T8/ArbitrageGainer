@@ -29,6 +29,8 @@ Implements WebSocket connection to Polygon.io API for real-time crypto data:
 - Maintains price cache for different exchanges
 - Processes real-time trade events
 - Evaluates trading opportunities based on configured parameters  
+### Endpoints:
+ - "GET /crosstraded" -> return a list of cross traded string
 
 ### 1.4 Annualized Return Metric Calculation
 **Location**: `./1.1/annualizedReturnCalculate.fs`  
