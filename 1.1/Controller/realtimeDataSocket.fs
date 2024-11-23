@@ -1,24 +1,34 @@
 ﻿module Controller.RealtimeDataSocket
 
 open System
-open System.Net
 open System.Net.WebSockets
+open System.Text
 open System.Text.Json
 open System.Threading
-open System.Text
-open Suave
-open Suave.RequestErrors
 
-// Define types for handling incoming data
-type CryptoQuote = {
-    Pair: string
+// Domain types
+type Exchange = Exchange of int
+type CurrencyPair = CurrencyPair of string
+
+type Quote = {
     AskPrice: decimal
     BidPrice: decimal
-    ExchangeId: int
     Timestamp: int64
 }
 
-// Message structure for Polygon events
+type CryptoQuote = {
+    Pair: CurrencyPair
+    Exchange: Exchange
+    Quote: Quote
+}
+
+// Discriminated union for WebSocket messages
+type WebSocketMessage =
+    | Text of string
+    | Close
+    | Other
+
+// Types for Polygon messages
 type PolygonMessage = {
     ev: string
     pair: string
@@ -28,107 +38,166 @@ type PolygonMessage = {
     t: int64
 }
 
-// Type for caching quotes
+// Immutable price cache
 type PriceCache = {
-    LastQuotes: Map<string * int, CryptoQuote>
+    Quotes: Map<CurrencyPair * Exchange, Quote>
 }
 
-// Initialize an empty cache to store the latest quotes
-let mutable priceCache = { LastQuotes = Map.empty }
+// Result type for operations
+type WebSocketResult<'T> =
+    | Success of 'T
+    | Error of string
 
-// Function to connect to Polygon WebSocket API
-let connectToPolygon (apiKey: string) : Async<Result<ClientWebSocket, string>> =
-    async {
-        let uri = Uri("wss://socket.polygon.io/crypto")
-        let wsClient = new ClientWebSocket()
-        
-        try
-            // Connect to the WebSocket
-            do! wsClient.ConnectAsync(uri, CancellationToken.None) |> Async.AwaitTask
-            printfn "Connected to Polygon WebSocket."
+// Module for cache operations
+module QuoteCache =
+    let empty = { Quotes = Map.empty }
+    
+    let updateQuote (cache: PriceCache) (quote: CryptoQuote) =
+        let key = (quote.Pair, quote.Exchange)
+        { cache with Quotes = cache.Quotes.Add(key, quote.Quote) }
+    
+    let tryGetQuote (cache: PriceCache) (pair: CurrencyPair) (exchange: Exchange) =
+        cache.Quotes.TryFind((pair, exchange))
+
+// WebSocket connection module
+module WebSocket =
+    let connect (apiKey: string) : Async<WebSocketResult<ClientWebSocket>> =
+        async {
+            let uri = Uri("wss://socket.polygon.io/crypto")
+            let wsClient = new ClientWebSocket()
             
-            // Authenticate using the API key
-            let authMessage = sprintf """{"action":"auth","params":"%s"}""" apiKey
-            let authMessageBytes = Encoding.UTF8.GetBytes(authMessage)
-            let! _ = wsClient.SendAsync(new ArraySegment<byte>(authMessageBytes), WebSocketMessageType.Text, true, CancellationToken.None) |> Async.AwaitTask
-            return Ok wsClient
+            try
+                do! wsClient.ConnectAsync(uri, CancellationToken.None) |> Async.AwaitTask
+                let authMessage = sprintf """{"action":"auth","params":"%s"}""" apiKey
+                let authMessageBytes = Encoding.UTF8.GetBytes(authMessage)
+                do! wsClient.SendAsync(
+                        new ArraySegment<byte>(authMessageBytes), 
+                        WebSocketMessageType.Text, 
+                        true, 
+                        CancellationToken.None) |> Async.AwaitTask
+                return Success wsClient
+            with
+            | ex -> return Error (sprintf "Connection failed: %s" ex.Message)
+        }
+    
+    let subscribe (wsClient: ClientWebSocket) (pairs: CurrencyPair list) : Async<WebSocketResult<unit>> =
+        async {
+            try
+                let pairsStr = 
+                    pairs 
+                    |> List.map (fun (CurrencyPair p) -> sprintf "XQ.%s" p) 
+                    |> String.concat ","
+                let subMessage = sprintf """{"action":"subscribe","params":"%s"}""" pairsStr
+                let subMessageBytes = Encoding.UTF8.GetBytes(subMessage)
+                do! wsClient.SendAsync(
+                        new ArraySegment<byte>(subMessageBytes), 
+                        WebSocketMessageType.Text, 
+                        true, 
+                        CancellationToken.None) |> Async.AwaitTask
+                return Success ()
+            with
+            | ex -> return Error (sprintf "Subscription failed: %s" ex.Message)
+        }
+    
+    let receiveMessage (wsClient: ClientWebSocket) : Async<WebSocketMessage> =
+        async {
+            let buffer = Array.zeroCreate 8192
+            let segment = ArraySegment(buffer)
+            let! result = wsClient.ReceiveAsync(segment, CancellationToken.None) |> Async.AwaitTask
+            
+            match result.MessageType with
+            | WebSocketMessageType.Text ->
+                return Text(Encoding.UTF8.GetString(buffer, 0, result.Count))
+            | WebSocketMessageType.Close ->
+                return Close
+            | _ ->
+                return Other
+        }
+
+// Market data processing module
+module MarketData =
+    let processMessage (message: string) : CryptoQuote list =
+        try
+            let quotes = JsonSerializer.Deserialize<PolygonMessage[]>(message)
+            quotes
+            |> Array.filter (fun q -> q.ev = "XQ")
+            |> Array.map (fun q -> 
+                {
+                    Pair = CurrencyPair q.pair
+                    Exchange = Exchange q.x
+                    Quote = {
+                        AskPrice = q.ap
+                        BidPrice = q.bp
+                        Timestamp = q.t
+                    }
+                })
+            |> Array.toList
         with
         | ex -> 
-            return Error (sprintf "Connection failed: %s" ex.Message)
-    }
+            printfn "Error processing message: %s" ex.Message
+            []
 
-// Function to subscribe to specific currency pairs for real-time updates
-let subscribeToPairs (wsClient: ClientWebSocket) (pairs: string list) : Async<unit> =
-    async {
-        let pairsStr = String.concat "," pairs
-        let subMessage = sprintf """{"action":"subscribe","params":"%s"}""" pairsStr
-        let subMessageBytes = Encoding.UTF8.GetBytes(subMessage)
-        do! wsClient.SendAsync(new ArraySegment<byte>(subMessageBytes), WebSocketMessageType.Text, true, CancellationToken.None) |> Async.AwaitTask
-        printfn "Subscribed to pairs: %s" pairsStr
+// Market data service module
+module MarketDataService =
+    type DataFeedState = {
+        Cache: PriceCache
+        WebSocket: ClientWebSocket option
+        SubscribedPairs: CurrencyPair list
     }
-
-// Function to process incoming WebSocket messages and update the cache
-let processMessage (message: string) =
-    try
-        // Deserialize the incoming message to a list of PolygonMessage objects
-        let quotes = JsonSerializer.Deserialize<PolygonMessage[]>(message)
+    
+    let initState = {
+        Cache = QuoteCache.empty
+        WebSocket = None
+        SubscribedPairs = []
+    }
+    
+    let subscribeToMarketData 
+        (apiKey: string) 
+        (pairs: CurrencyPair list) 
+        (onQuoteReceived: CryptoQuote -> unit) : Async<unit> = // Changed return type to Async<unit>
         
-        // Loop through each quote and update the cache
-        for quote in quotes do
-            if quote.ev = "XQ" then  // Only process "quote" events
-                let updatedQuote = {
-                    Pair = quote.pair
-                    AskPrice = quote.ap
-                    BidPrice = quote.bp
-                    ExchangeId = quote.x
-                    Timestamp = quote.t
-                }
-                // Update the price cache with the latest quote
-                priceCache <- { LastQuotes = priceCache.LastQuotes.Add((quote.pair, quote.x), updatedQuote) }
-                printfn "Cached quote for %s at %A" quote.pair updatedQuote  // Log each cached quote
-    with
-    | ex -> printfn "Error processing message: %s" ex.Message
-
-// Recursive function to continuously receive data from the WebSocket
-let rec receiveData (wsClient: ClientWebSocket) =
-    async {
-        let buffer = Array.zeroCreate 8192
-        let segment = ArraySegment(buffer)
+        let rec processMarketData (wsClient: ClientWebSocket) (state: DataFeedState) =
+            async {
+                match! WebSocket.receiveMessage wsClient with
+                | Text message ->
+                    let quotes = MarketData.processMessage message
+                    let newCache = 
+                        quotes 
+                        |> List.fold QuoteCache.updateQuote state.Cache
+                    
+                    // Notify about updates
+                    quotes |> List.iter onQuoteReceived
+                    
+                    return! processMarketData wsClient { state with Cache = newCache }
+                | Close ->
+                    printfn "Market data feed connection closed."
+                    ()  // Return unit instead of state
+                | Other ->
+                    return! processMarketData wsClient state
+            }
         
-        let! result = wsClient.ReceiveAsync(segment, CancellationToken.None) |> Async.AwaitTask
-        match result.MessageType with
-        | WebSocketMessageType.Text ->
-            let message = Encoding.UTF8.GetString(buffer, 0, result.Count)
-            processMessage message  // Process each message received
-            return! receiveData wsClient  // Recursive call for continuous retrieval
-        | WebSocketMessageType.Close ->
-            printfn "WebSocket connection closed."
-        | _ -> return! receiveData wsClient  // Ignore other message types and continue
-    }
+        async {
+            match! WebSocket.connect apiKey with
+            | Success wsClient ->
+                match! WebSocket.subscribe wsClient pairs with
+                | Success _ ->
+                    let initialState = { 
+                        initState with 
+                            WebSocket = Some wsClient
+                            SubscribedPairs = pairs 
+                    }
+                    do! processMarketData wsClient initialState  // Changed to do!
+                | Error err ->
+                    printfn "Failed to subscribe to market data: %s" err
+            | Error err ->
+                printfn "Failed to connect to market data feed: %s" err
+        }
 
-// Function to initialize and start the market data feed
-let startMarketDataFeed (apiKey: string) (pairs: string list) =
-    async {
-        let! wsClientResult = connectToPolygon apiKey
-        match wsClientResult with
-        | Ok wsClient ->
-            do! subscribeToPairs wsClient pairs
-            do! receiveData wsClient
-            return Ok ()
-        | Error errMsg -> return Error "Intialization Fair"
-    }
-
-let realtimeDataFeedBeginController (ctx: HttpContext) =
-    async {
-        let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
-        let pairs = ["XQ.BTC-USD"]      
-        let! respond = startMarketDataFeed apiKey pairs
-        match respond with
-        | Ok _ -> return! Successful.OK "" ctx
-        | Error err -> return! BAD_REQUEST "Error" ctx
-
-    }
-
-
+let pairs = [CurrencyPair "BTC-USD"; CurrencyPair "ETH-USD"]
+let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
+let handleQuoteUpdate (quote: CryptoQuote) =
+    // Handle incoming market data quotes
+    printfn "Received quote for %A: Ask=%M Bid=%M" 
+        quote.Pair quote.Quote.AskPrice quote.Quote.BidPrice
 
 
