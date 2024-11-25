@@ -48,7 +48,7 @@ let parseRetrieveURL (url:string) (orderInfo: orderInformation) (orderID:string)
     
     
 let constructBitfinexPostBody (orderInfo: orderInformation) =
-    JsonSerializer.Serialize({|
+    System.Text.Json.JsonSerializer.Serialize({|
         ``type`` = "EXCHANGE LIMIT" 
         price = orderInfo.price 
         symbol = ("t" + orderInfo.currencyPair).Split "-" |> String.concat "" 
@@ -56,7 +56,7 @@ let constructBitfinexPostBody (orderInfo: orderInformation) =
     |})
 
 let constructKrakenPostBody (orderInfo: orderInformation) (taskName: string) =
-    JsonSerializer.Serialize({|
+    System.Text.Json.JsonSerializer.Serialize({|
         nouce = DateTime.Now.ToString()
         ordertype = "limit"
         ``type`` = taskName
@@ -66,7 +66,7 @@ let constructKrakenPostBody (orderInfo: orderInformation) (taskName: string) =
     |})
 
 let constructBitstampPostBody (orderInfo: orderInformation)  =
-        JsonSerializer.Serialize({|
+        System.Text.Json.JsonSerializer.Serialize({|
         price = orderInfo.price
         amount = orderInfo.amount                      
         |})
