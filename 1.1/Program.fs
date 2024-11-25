@@ -7,7 +7,6 @@ open Suave.Operators
 
 open Controller.RetrieveCrossTradedPair
 open Controller.AnnualizedReturnCalculate
-open Controller.RealtimeDataSocket
 open TradingStrategy.Service
 open TradingStrategy.Infrastructure
 
@@ -28,7 +27,6 @@ let main argv =
               PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler strategyAgent 
               GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
               POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
-              GET >=> path "/realtime" >=> realtimeDataFeedBeginController 
             ]
     startWebServer defaultConfig app
     0
