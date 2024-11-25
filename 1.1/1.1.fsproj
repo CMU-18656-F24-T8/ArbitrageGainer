@@ -11,7 +11,13 @@
     <Compile Include="Controller\realtimeDataSocket.fs" />
     <Compile Include="Controller\retrieveCrossTradedPair.fs" />
     <Compile Include="Controller\annualizedReturnCalculate.fs" />
+    <Compile Include="TradingStrategy\Core.fs" />
+    <Compile Include="TradingStrategy\Infrastructure.fs" />
+    <Compile Include="TradingStrategy\Service.fs" />
     <Compile Include="Program.fs" />
+    <Compile Include="TradingStrategy\Service.fs" />
+    <Compile Include="TradingStrategy\Core.fs" />
+    <Compile Include="TradingStrategy\Infrastructure.fs" />
   </ItemGroup>
 
   <ItemGroup>
