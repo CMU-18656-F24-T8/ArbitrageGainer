@@ -5,21 +5,23 @@ open System.Net.WebSockets
 open System.Text
 open System.Text.Json
 open System.Threading
+open System.Text.Json.Serialization
 
 // Domain types
 type Exchange = Exchange of int
 type CurrencyPair = CurrencyPair of string
 
-type Quote = {
-    AskPrice: decimal
-    BidPrice: decimal
-    Timestamp: int64
-}
+
+type QuoteType = 
+    | Ask
+    | Bid
 
 type CryptoQuote = {
     Pair: CurrencyPair
     Exchange: Exchange
-    Quote: Quote
+    Type: QuoteType
+    Size: decimal
+    Price: decimal
 }
 
 // Discriminated union for WebSocket messages
@@ -34,13 +36,15 @@ type PolygonMessage = {
     pair: string
     ap: decimal
     bp: decimal
+    [<JsonPropertyName("as")>] _as: decimal
+    bs: decimal
     x: int
     t: int64
 }
 
 // Immutable price cache
 type PriceCache = {
-    Quotes: Map<CurrencyPair * Exchange, Quote>
+    Quotes: Map<CurrencyPair * QuoteType, CryptoQuote>
 }
 
 // Result type for operations
@@ -52,18 +56,37 @@ type WebSocketResult<'T> =
 module QuoteCache =
     let empty = { Quotes = Map.empty }
     
-    let updateQuote (cache: PriceCache) (quote: CryptoQuote) =
-        let key = (quote.Pair, quote.Exchange)
-        { cache with Quotes = cache.Quotes.Add(key, quote.Quote) }
+    let updateQuote (cache: PriceCache) (quote: PolygonMessage) =
+        let oldAsk = cache.Quotes.TryFind((CurrencyPair quote.pair, Ask))
+        let oldBid = cache.Quotes.TryFind((CurrencyPair quote.pair, Bid))
+        let updatedAsk =
+           match oldAsk with
+           | Some oldAsk when oldAsk.Price < quote.ap -> oldAsk  // if old exists and price is smaller, keep it
+           | _ -> { Pair = CurrencyPair quote.pair; Exchange = Exchange quote.x; Type = Ask; Size = quote._as; Price = quote.ap }
+        let updatedBid =
+           match oldBid with
+           | Some oldBid when oldBid.Price > quote.bp -> oldBid  // if old exists and price is higher, keep it
+           | _ -> { Pair = CurrencyPair quote.pair; Exchange = Exchange quote.x; Type = Bid; Size = quote.bs; Price = quote.bp }
+        { Quotes = cache.Quotes.Add((CurrencyPair quote.pair, Ask), updatedAsk).Add((CurrencyPair quote.pair, Bid), updatedBid) }
     
-    let tryGetQuote (cache: PriceCache) (pair: CurrencyPair) (exchange: Exchange) =
-        cache.Quotes.TryFind((pair, exchange))
+    let tryGetQuote (cache: PriceCache) (pair: CurrencyPair) (quoteType: QuoteType) =
+        cache.Quotes.TryFind((pair, quoteType))
+        
+    let removeCachedQuote (cache: PriceCache) (pair: string option)=
+        match pair with
+        | Some pair -> 
+            let pair = CurrencyPair pair
+            { Quotes = cache.Quotes.Remove((pair, Ask)).Remove((pair, Bid)) }
+        | None -> cache
 
 // WebSocket connection module
+
+open QuoteCache
+
 module WebSocket =
-    let connect (apiKey: string) : Async<WebSocketResult<ClientWebSocket>> =
+    let connect (apiKey: string) (endpoint: string): Async<WebSocketResult<ClientWebSocket>> =
         async {
-            let uri = Uri("wss://socket.polygon.io/crypto")
+            let uri = Uri(endpoint)
             let wsClient = new ClientWebSocket()
             
             try
@@ -116,21 +139,11 @@ module WebSocket =
 
 // Market data processing module
 module MarketData =
-    let processMessage (message: string) : CryptoQuote list =
+    let processMessage (message: string) : PolygonMessage list =
         try
             let quotes = JsonSerializer.Deserialize<PolygonMessage[]>(message)
             quotes
             |> Array.filter (fun q -> q.ev = "XQ")
-            |> Array.map (fun q -> 
-                {
-                    Pair = CurrencyPair q.pair
-                    Exchange = Exchange q.x
-                    Quote = {
-                        AskPrice = q.ap
-                        BidPrice = q.bp
-                        Timestamp = q.t
-                    }
-                })
             |> Array.toList
         with
         | ex -> 
@@ -152,9 +165,11 @@ module MarketDataService =
     }
     
     let subscribeToMarketData 
+        (endpoint: string)
         (apiKey: string) 
         (pairs: CurrencyPair list) 
-        (onQuoteReceived: CryptoQuote -> unit) : Async<unit> = // Changed return type to Async<unit>
+        (onQuoteReceived: (PolygonMessage * PriceCache) -> string option)
+        : Async<unit> = // Changed return type to Async<unit>
         
         let rec processMarketData (wsClient: ClientWebSocket) (state: DataFeedState) =
             async {
@@ -165,10 +180,14 @@ module MarketDataService =
                         quotes 
                         |> List.fold QuoteCache.updateQuote state.Cache
                     
-                    // Notify about updates
-                    quotes |> List.iter onQuoteReceived
+                    // Notify about updates, along with the cached quote
+                    let removedCache =
+                      quotes
+                      |> List.map (fun q -> (q, newCache))
+                      |> List.map onQuoteReceived
+                      |> List.fold QuoteCache.removeCachedQuote newCache
                     
-                    return! processMarketData wsClient { state with Cache = newCache }
+                    return! processMarketData wsClient { state with Cache = removedCache }
                 | Close ->
                     printfn "Market data feed connection closed."
                     ()  // Return unit instead of state
@@ -177,7 +196,7 @@ module MarketDataService =
             }
         
         async {
-            match! WebSocket.connect apiKey with
+            match! WebSocket.connect apiKey endpoint with
             | Success wsClient ->
                 match! WebSocket.subscribe wsClient pairs with
                 | Success _ ->
@@ -192,12 +211,5 @@ module MarketDataService =
             | Error err ->
                 printfn "Failed to connect to market data feed: %s" err
         }
-
-let pairs = [CurrencyPair "BTC-USD"; CurrencyPair "ETH-USD"]
-let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
-let handleQuoteUpdate (quote: CryptoQuote) =
-    // Handle incoming market data quotes
-    printfn "Received quote for %A: Ask=%M Bid=%M" 
-        quote.Pair quote.Quote.AskPrice quote.Quote.BidPrice
 
 

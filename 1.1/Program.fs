@@ -9,6 +9,7 @@ open Controller.RetrieveCrossTradedPair
 open Controller.AnnualizedReturnCalculate
 open TradingStrategy.Service
 open TradingStrategy.Infrastructure
+open Controller.RealtimeTrading
 
 let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
 let pairs = ["XQ.BTC-USD"]  
@@ -30,3 +31,11 @@ let main argv =
             ]
     startWebServer defaultConfig app
     0
+
+
+// Test script for realtime trading
+// let main _ =
+//     insertEntity strategyAgent { NumberOfCryptos = 5; MinPriceSpread = 0.05; MinTransactionProfit = 5; MaxTransactionValue = 2000.0; MaxTradingValue = 5000.0; InitialInvestment = 1000.0 }
+//     subscribeToQuotes()
+//     Console.ReadLine() |> ignore
+//     0
