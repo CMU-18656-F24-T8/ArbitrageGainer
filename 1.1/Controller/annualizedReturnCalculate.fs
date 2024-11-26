@@ -54,7 +54,7 @@ let calculateAnnualizedReturnHandler =
             ctx.rawForm
             |> System.Text.Encoding.UTF8.GetString
             |> JsonConvert.DeserializeObject<AnnualizedReturnInput>
-
+        
         match calculateAnnualizedReturn input with
         | Success result -> OK(JsonConvert.SerializeObject(result))
         | Error error ->

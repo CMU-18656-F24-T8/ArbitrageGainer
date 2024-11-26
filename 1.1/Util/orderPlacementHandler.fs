@@ -9,7 +9,8 @@ open Suave.RequestErrors
 open System.Text.Json
 open System.Text
 open Newtonsoft.Json
-
+open Util
+open Util.DAC
 
 let httpClient = new HttpClient()
 
@@ -23,6 +24,7 @@ type CryptoQuoteOnTransact ={
 type OrderError =
     | NewWorkError of string * string
     | ParsingError of string * string
+    | DbError
 
 let rawTrading = File.ReadAllText("Datas/tradingWebsites.json")
 let tradingWebsite = JsonValue.Parse(rawTrading)
@@ -71,8 +73,14 @@ let constructPostBody (cryptoQuote: CryptoQuoteOnTransact) (taskName: string) =
     | "BitStamp" -> Ok(constructBitstampPostBody cryptoQuote)
     | _ -> Error (ParsingError(taskName, cryptoQuote.Exchange))
 
+let extractID (response:JsonValue) exchangeName=
+    match exchangeName with
+    | "Bitfinex" -> response.[3].AsString()
+    | "Kraken" -> response.["txid"].AsString()
+    | "Bitstamp" -> response.["id"].AsString()
+    
 // Infrastructure submit
-let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string)=
+let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string) saver=
     async{
         try
             let apiDest = tradingWebsite.GetProperty(cryptoQuote.Exchange).GetProperty(taskName).AsString()
@@ -86,7 +94,9 @@ let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string)=
                                | true ->
                                         let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
                                         let data = JsonValue.Parse(content)
-                                        return Ok data
+                                        match saver content (extractID data cryptoQuote.Exchange)|>Async.RunSynchronously with
+                                        | Ok _ -> return Ok data
+                                        | Error _ -> return Error DbError
 
             | Error bodyResult -> return Error (ParsingError(taskName, cryptoQuote.Exchange))
         with
@@ -94,7 +104,7 @@ let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string)=
     }
 
 // Infrastructure - Retrieve
-let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue)=
+let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue) saver=
     async{
         try
             let orderId =
@@ -112,19 +122,21 @@ let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue
                    | true ->
                             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
                             let data = JsonValue.Parse(content)
-                            return Ok orderId
+                            match saver content (extractID data cryptoQuote.Exchange)|>Async.RunSynchronously with
+                            | Ok _ -> return Ok orderId
+                            | Error _ -> return Error DbError
         with
         | ex -> return Error (ParsingError("retrieve", cryptoQuote.Exchange))
 
     }    
 //To add data saver
-let generateOrderPlacement (cryptoQuotermation : CryptoQuoteOnTransact) (taskName: string)=
+let generateOrderPlacement (cryptoQuotermation: CryptoQuoteOnTransact) (taskName: string) saver =
     async{
-        let! orderPlacement = submitOrder cryptoQuotermation taskName
+        let! orderPlacement = submitOrder cryptoQuotermation taskName saver
         match orderPlacement with
         | Ok result ->  
             do! Async.Sleep(5000)
-            return! submitRetrieval cryptoQuotermation result
+            return! submitRetrieval cryptoQuotermation result saver
         | Error err -> 
             return Error err
     }
@@ -138,10 +150,12 @@ let genOrderErrorMessage (e: OrderError) =
     
 let orderHandler (buycryptoQuotermation : CryptoQuoteOnTransact) (sellcryptoQuotermation: CryptoQuoteOnTransact)=
     async {
+            let a = """{"name":"Tom"}"""
+            let saver = DAC.UpsertTableString "transactionHistory" 
             let! results = 
                             [
-                                generateOrderPlacement buycryptoQuotermation "buy"
-                                generateOrderPlacement sellcryptoQuotermation "sell"
+                                generateOrderPlacement buycryptoQuotermation "buy" saver
+                                generateOrderPlacement sellcryptoQuotermation "sell" saver
                             ] 
                             |> Async.Parallel
             let finalResults = results |> Array.map (fun rst ->

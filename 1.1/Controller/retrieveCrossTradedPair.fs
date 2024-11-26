@@ -1,5 +1,7 @@
 ﻿module Controller.RetrieveCrossTradedPair
 
+open System.Reflection.Metadata
+open System.Text.Json
 open Azure.Data.Tables
 open Microsoft.FSharp.Collections
 open Microsoft.FSharp.Core
@@ -9,7 +11,9 @@ open System.Net.Http
 open Suave.RequestErrors
 open FSharp.Data
 
+open Util
 open Util.ExchangeDataParser
+open Util.DAC
 
 let httpClient = new HttpClient()
 
@@ -79,8 +83,13 @@ let fetchAllCrossTradedExchangeData ()=
 
 let retrieveCrossTradedPairsHandler (ctx: HttpContext) : Async<HttpContext option> = 
     async {
+        let saver = DAC.UpsertTableString "common"
         let! task = fetchAllCrossTradedExchangeData ()
+        
+
         match task with
-        | Ok pairs-> return! Successful.OK (JsonConvert.SerializeObject(pairs)) ctx
+        | Ok pairs->
+            (saver (System.Text.Json.JsonSerializer.Serialize(pairs)) "crossTradedPairs") |>Async.RunSynchronously  |> ignore
+            return! Successful.OK (JsonConvert.SerializeObject(pairs)) ctx
         | Error err -> return! BAD_REQUEST "Error" ctx
     }
