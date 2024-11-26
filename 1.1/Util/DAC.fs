@@ -4,7 +4,7 @@ open Azure.Data.Tables
 open Azure
 open Microsoft.FSharp.Reflection
 
-let storageConnString  = "DefaultEndpointsProtocol=https;AccountName=arbitrage-db;AccountKey=c8GMmbsHkT0iuejjzY0lmpXbAHSLvEE3bWdQM6xTX9yoZqtwqyzxUIqlj6EhnnHgQMMbGXtyBtSaACDbC9Y1rg==;TableEndpoint=https://arbitrage-db.table.cosmos.azure.com:443/;";
+let storageConnString  = "";
 let tableClient = TableServiceClient storageConnString
 
 let tableNames = [
