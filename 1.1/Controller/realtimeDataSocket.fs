@@ -11,7 +11,6 @@ open System.Text.Json.Serialization
 type Exchange = Exchange of int
 type CurrencyPair = CurrencyPair of string
 
-
 type QuoteType = 
     | Ask
     | Bid
