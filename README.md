@@ -35,3 +35,10 @@ Implements WebSocket connection to Polygon.io API for real-time crypto data:
 the average yearly return of a trading strategy, providing a more extended view of performance of the system.  
 REST API endpoint:
 - `POST /annualized_return` - Calculate annualized return
+
+# Technical Debt
+
+There are some technical debt still remaining: 
+- Naming issue due to lack of communication. This means that a lot of the bridges need to be adapted. 
+- Namespace inconsistency
+- The performance of a lot of function could be improved. 
