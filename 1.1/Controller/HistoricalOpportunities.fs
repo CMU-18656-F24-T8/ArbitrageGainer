@@ -1,5 +1,6 @@
-module Controller.HistoricalOppotunities
+module Controller.HistoricalOpportunities
 
+open Controller.RealtimeDataSocket
 open FSharp.Data
 
 // Static
@@ -56,9 +57,9 @@ let opportunitiesPerPair =
         let totalOpportunities = ops |> Seq.sumBy snd
         (pair, totalOpportunities))
 
-// Print
-opportunitiesPerPair
-|> Seq.iter (fun (pair, opportunities) ->
-    match opportunities with
-    | 0 -> ()
-    | n -> printfn "%s, %d opportunities" pair n)
+let getTopNOpportunities n =
+    opportunitiesPerPair
+    |> Seq.sortByDescending snd
+    |> Seq.take n
+    |> Seq.map (fun (pair, _) -> CurrencyPair pair)
+    |> Seq.toList

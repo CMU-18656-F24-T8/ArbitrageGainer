@@ -1,11 +1,14 @@
 module Controller.RealtimeTrading
 open System
+open Controller.HistoricalOpportunities
 open Controller.RealtimeDataSocket
 open TradingStrategy.Infrastructure
 open Controller.orderPlacementHandler
 
 // Get most arbitrage opportunities in the past
-let getPairs = []  // TODO: Get pairs from historical data
+
+let strategy = getTradingStrategy strategyAgent
+let pairs = getTopNOpportunities strategy.NumberOfCryptos
 
 // Function to map Exchange integer to its corresponding name
 let exchangeName (exchange: Exchange) =
@@ -85,7 +88,7 @@ let handleQuote quote =
 let subscribeToQuotes() =
     let apiKey = ""
     let endpoint = "wss://one8656-live-data.onrender.com/"
-    MarketDataService.subscribeToMarketData endpoint apiKey getPairs handleQuote
+    MarketDataService.subscribeToMarketData endpoint apiKey pairs handleQuote
     |> Async.Start
 
 

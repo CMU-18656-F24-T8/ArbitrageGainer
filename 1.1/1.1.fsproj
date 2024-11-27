@@ -16,7 +16,7 @@
     <Compile Include="Controller\realtimeDataSocket.fs" />
     <Compile Include="Controller\retrieveCrossTradedPair.fs" />
     <Compile Include="Controller\annualizedReturnCalculate.fs" />
-    <Compile Include="Controller\HistoricalOppotunities.fs" />
+    <Compile Include="Controller\HistoricalOpportunities.fs" />
     <Compile Include="Controller\RealtimeTrading.fs" />
     <Content Include="Datas\tradingWebsites.json" />
     <Compile Include="Program.fs" />
