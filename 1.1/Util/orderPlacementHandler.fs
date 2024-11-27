@@ -1,6 +1,7 @@
 ﻿module Controller.orderPlacementHandler
 
 open System
+open System.Collections.Generic
 open FSharp.Data
 open System.IO
 open Suave
@@ -25,6 +26,10 @@ type OrderError =
     | NewWorkError of string * string
     | ParsingError of string * string
     | DbError
+
+type FinishType =
+| Full
+| Partial
 
 let rawTrading = File.ReadAllText("Datas/tradingWebsites.json")
 let tradingWebsite = JsonValue.Parse(rawTrading)
@@ -80,7 +85,7 @@ let extractID (response:JsonValue) exchangeName=
     | "Bitstamp" -> response.["id"].AsString()
     
 // Infrastructure submit
-let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string) saver=
+let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string)=
     async{
         try
             let apiDest = tradingWebsite.GetProperty(cryptoQuote.Exchange).GetProperty(taskName).AsString()
@@ -94,9 +99,7 @@ let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string) saver=
                                | true ->
                                         let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
                                         let data = JsonValue.Parse(content)
-                                        match saver content (extractID data cryptoQuote.Exchange)|>Async.RunSynchronously with
-                                        | Ok _ -> return Ok data
-                                        | Error _ -> return Error DbError
+                                        return Ok data
 
             | Error bodyResult -> return Error (ParsingError(taskName, cryptoQuote.Exchange))
         with
@@ -104,7 +107,7 @@ let submitOrder (cryptoQuote: CryptoQuoteOnTransact) (taskName: string) saver=
     }
 
 // Infrastructure - Retrieve
-let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue) saver=
+let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue)=
     async{
         try
             let orderId =
@@ -122,21 +125,52 @@ let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue
                    | true ->
                             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
                             let data = JsonValue.Parse(content)
-                            match saver content (extractID data cryptoQuote.Exchange)|>Async.RunSynchronously with
-                            | Ok _ -> return Ok data
-                            | Error _ -> return Error DbError
+                            return Ok data
         with
         | ex -> return Error (ParsingError("retrieve", cryptoQuote.Exchange))
 
-    }    
+    }
+    
+let getRemaingAmount (sub: JsonValue) (ret:JsonValue) (exchangeName:String) =
+    match exchangeName with
+    | "Bitfinex" ->
+        let origAmount = sub.[3].[6].AsFloat()
+        let exeAmount = ret.[4].AsFloat()
+        origAmount-exeAmount
+    | "Kraken" ->
+        let txid = extractID sub exchangeName
+        ret.["result"].[txid].["vol"].AsFloat()-ret.["result"].[txid].["vol_exec"].AsFloat()
+    | "BitStamp" ->
+        ret.["amount_remaining"].AsFloat()
+    
+        
 //To add data saver
-let generateOrderPlacement (cryptoQuotermation: CryptoQuoteOnTransact) (taskName: string) saver =
+let generateOrderPlacement (cryptoQuotermation: CryptoQuoteOnTransact) (taskName: string) saver=
     async{
-        let! orderPlacement = submitOrder cryptoQuotermation taskName saver
+        let! orderPlacement = submitOrder cryptoQuotermation taskName
         match orderPlacement with
         | Ok result ->  
             do! Async.Sleep(5000)
-            return! submitRetrieval cryptoQuotermation result saver
+            let! orderRetrieval = submitRetrieval cryptoQuotermation result
+            match orderRetrieval with
+            | Ok result2 ->
+                [result,result2] |> List.iter (fun r ->
+                                            let x = System.Text.Json.JsonSerializer.Serialize(r)
+                                            saver x (extractID result2 cryptoQuotermation.Exchange)|>ignore)
+
+                let remaining = getRemaingAmount result result2 cryptoQuotermation.Exchange
+                match remaining < 0.0001 with
+                | true ->
+                    return Ok Full
+                | false ->
+                    let! result3 = submitOrder { cryptoQuotermation with Size = 2.0 } taskName
+                    match result3 with
+                    | Ok data ->
+                                let x = System.Text.Json.JsonSerializer.Serialize(data)
+                                saver x (extractID result2 cryptoQuotermation.Exchange) |>ignore
+                                return Ok Partial
+                    | Error err -> return Error err
+            | Error err -> return Error err
         | Error err -> 
             return Error err
     }
@@ -148,10 +182,9 @@ let genOrderErrorMessage (e: OrderError) =
     | ParsingError(task, exchange) -> sprintf "Parsing error when %s at %s" task exchange
     | DbError -> "DB has error"
     | _ -> "Error"
-    
-let orderHandler (buycryptoQuotermation : CryptoQuoteOnTransact) (sellcryptoQuotermation: CryptoQuoteOnTransact)=
+
+let orderHandler (buycryptoQuotermation : CryptoQuoteOnTransact) (sellcryptoQuotermation: CryptoQuoteOnTransact) =
     async {
-           
             let saver = DAC.UpsertTableString "transactionHistory" 
             let! results = 
                             [
@@ -159,15 +192,16 @@ let orderHandler (buycryptoQuotermation : CryptoQuoteOnTransact) (sellcryptoQuot
                                 generateOrderPlacement sellcryptoQuotermation "sell" saver
                             ] 
                             |> Async.Parallel
-            let finalResults = results |> Array.map (fun rst ->
-                                                        match rst with
-                                                        | Ok data -> [true, data]
-                                                        | Error e ->
-                                                            let y = JsonValue.String (genOrderErrorMessage e)
-                                                            let x = JsonValue.Record [| ("error message", y) |]
-                                                            printf "%s" (genOrderErrorMessage e)
-                                                            [false, x] 
-                                                        )
-            return finalResults
+            
+            let failAmount =
+                    (results |>  Array.filter (fun result ->
+                                                match result with
+                                                | Ok _ -> false
+                                                | Error e -> true)).Length
+            match failAmount with
+            | 1 -> printfn "send an email"
+            | 2 -> printfn "failed"
+            | _ -> printfn "Succeed"
+            return failAmount
 
 }

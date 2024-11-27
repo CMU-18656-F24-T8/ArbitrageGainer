@@ -40,11 +40,13 @@ let UpsertTable<'T> (PartitionKey: string) (data:'T) (RowKey: string) =
 let UpsertTableString (PartitionKey: string) (data: string) (RowKey: string) =
     async {
         let entity = TableEntity()
+        printfn "%s" data
         entity.Add("Value", data)
         entity.Add("PartitionKey",PartitionKey)
         entity.Add("RowKey",RowKey)
         let res = table.UpsertEntity(entity,TableUpdateMode.Replace)
         match res.IsError with
-        | true -> return Result.Error ("Bad value")
+        | true ->
+            return Result.Error ("Bad value")
         | false -> return Ok ("Insert Successfully")
     }
