@@ -18,8 +18,8 @@
     <Compile Include="Controller\annualizedReturnCalculate.fs" />
     <Compile Include="Controller\HistoricalOppotunities.fs" />
     <Compile Include="Controller\RealtimeTrading.fs" />
-    <Compile Include="Program.fs" />
     <Content Include="Datas\tradingWebsites.json" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>

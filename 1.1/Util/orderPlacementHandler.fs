@@ -123,7 +123,7 @@ let submitRetrieval (cryptoQuote: CryptoQuoteOnTransact) (buySellData: JsonValue
                             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
                             let data = JsonValue.Parse(content)
                             match saver content (extractID data cryptoQuote.Exchange)|>Async.RunSynchronously with
-                            | Ok _ -> return Ok orderId
+                            | Ok _ -> return Ok data
                             | Error _ -> return Error DbError
         with
         | ex -> return Error (ParsingError("retrieve", cryptoQuote.Exchange))
@@ -146,11 +146,12 @@ let genOrderErrorMessage (e: OrderError) =
     match e with
     | NewWorkError(task, exchange) -> sprintf "Network error when %s at %s" task exchange
     | ParsingError(task, exchange) -> sprintf "Parsing error when %s at %s" task exchange
+    | DbError -> "DB has error"
     | _ -> "Error"
     
 let orderHandler (buycryptoQuotermation : CryptoQuoteOnTransact) (sellcryptoQuotermation: CryptoQuoteOnTransact)=
     async {
-            let a = """{"name":"Tom"}"""
+           
             let saver = DAC.UpsertTableString "transactionHistory" 
             let! results = 
                             [
@@ -161,8 +162,12 @@ let orderHandler (buycryptoQuotermation : CryptoQuoteOnTransact) (sellcryptoQuot
             let finalResults = results |> Array.map (fun rst ->
                                                         match rst with
                                                         | Ok data -> [true, data]
-                                                        | Error e -> [false, genOrderErrorMessage e])
-            
+                                                        | Error e ->
+                                                            let y = JsonValue.String (genOrderErrorMessage e)
+                                                            let x = JsonValue.Record [| ("error message", y) |]
+                                                            printf "%s" (genOrderErrorMessage e)
+                                                            [false, x] 
+                                                        )
             return finalResults
 
 }
