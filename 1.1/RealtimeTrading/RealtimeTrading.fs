@@ -3,7 +3,7 @@ open System
 open RealtimeTrading.HistoricalOpportunities
 open RealtimeTrading.RealtimeDataSocket
 open TradingStrategy.Infrastructure
-open Controller.orderPlacementHandler
+open RealtimeTrading.orderPlacementHandler
 
 // Get most arbitrage opportunities in the past
 

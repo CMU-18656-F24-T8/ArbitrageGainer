@@ -16,6 +16,9 @@ A configuration management service that handles trading parameters and notificat
 - `PATCH /trading_strategy` - Update max trading value
 - `POST /email` - Set notification email
 - `GET /email` - Retrieve configured email
+- `POST /realtime` - Start/stop real-time trading
+  - Message "start" starts real-time trading
+  - Message "stop" stops real-time trading
 ### 1.2 Retrieval of Cross-traded Currency Pairs
 Fetches and processes trading pairs from multiple exchanges:  
 - Bitfinex: `https://api-pub.bitfinex.com/v2/conf/pub:list:pair:exchange`
@@ -35,6 +38,22 @@ Implements WebSocket connection to Polygon.io API for real-time crypto data:
 the average yearly return of a trading strategy, providing a more extended view of performance of the system.  
 REST API endpoint:
 - `POST /annualized_return` - Calculate annualized return
+
+### 2.1 Real-time Trading Service
+
+Source code: `RealtimeTrading/RtTradingService.fs`
+
+### 2.2 Orders Management Service
+
+Source code: `RealtimeTrading/orderPlacementHandler.fs`
+
+### 2.3 P&L calculation
+
+Source code: `Controller/PLCalculation.fs`
+
+### 2.4 Annualized return metric calculation refactoring
+
+Source code: `Controller/annualizedReturnCalculate.fs`
 
 # Technical Debt
 

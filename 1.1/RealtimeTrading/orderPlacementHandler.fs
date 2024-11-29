@@ -1,4 +1,4 @@
-﻿module Controller.orderPlacementHandler
+﻿module RealtimeTrading.orderPlacementHandler
 
 open System
 open System.Collections.Generic

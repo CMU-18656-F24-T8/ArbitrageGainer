@@ -9,7 +9,6 @@
   <ItemGroup>
     <Compile Include="Util\DAC.fs" />
     <Compile Include="Util\ExchangeDataParser.fs" />
-    <Compile Include="Util\orderPlacementHandler.fs" />
     <Compile Include="TradingStrategy\Core.fs" />
     <Compile Include="TradingStrategy\Infrastructure.fs" />
     <Compile Include="TradingStrategy\Service.fs" />
@@ -17,6 +16,7 @@
     <Content Include="Datas\tradingWebsites.json" />
     <Compile Include="RealtimeTrading\Core.fs" />
     <Compile Include="RealtimeTrading\Infrastructure.fs" />
+    <Compile Include="RealtimeTrading\orderPlacementHandler.fs" />
     <Compile Include="RealtimeTrading\realtimeDataSocket.fs" />
     <Compile Include="RealtimeTrading\HistoricalOpportunities.fs" />
     <Compile Include="RealtimeTrading\retrieveCrossTradedPair.fs" />
