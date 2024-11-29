@@ -13,12 +13,15 @@
     <Compile Include="TradingStrategy\Core.fs" />
     <Compile Include="TradingStrategy\Infrastructure.fs" />
     <Compile Include="TradingStrategy\Service.fs" />
-    <Compile Include="Controller\realtimeDataSocket.fs" />
-    <Compile Include="Controller\retrieveCrossTradedPair.fs" />
     <Compile Include="Controller\annualizedReturnCalculate.fs" />
-    <Compile Include="Controller\HistoricalOpportunities.fs" />
-    <Compile Include="Controller\RealtimeTrading.fs" />
     <Content Include="Datas\tradingWebsites.json" />
+    <Compile Include="RealtimeTrading\Core.fs" />
+    <Compile Include="RealtimeTrading\Infrastructure.fs" />
+    <Compile Include="RealtimeTrading\realtimeDataSocket.fs" />
+    <Compile Include="RealtimeTrading\HistoricalOpportunities.fs" />
+    <Compile Include="RealtimeTrading\retrieveCrossTradedPair.fs" />
+    <Compile Include="RealtimeTrading\RealtimeTrading.fs" />
+    <Compile Include="RealtimeTrading\Service.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

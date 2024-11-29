@@ -1,7 +1,7 @@
-module Controller.RealtimeTrading
+module RealtimeTrading.RealtimeTrading
 open System
-open Controller.HistoricalOpportunities
-open Controller.RealtimeDataSocket
+open RealtimeTrading.HistoricalOpportunities
+open RealtimeTrading.RealtimeDataSocket
 open TradingStrategy.Infrastructure
 open Controller.orderPlacementHandler
 
@@ -85,10 +85,6 @@ let handleQuote quote =
     | _ -> None  // printfn "No enough data to calculate spread"
 
 // Subscribe to market data
-let subscribeToQuotes() =
-    let apiKey = ""
-    let endpoint = "wss://one8656-live-data.onrender.com/"
-    MarketDataService.subscribeToMarketData endpoint apiKey pairs handleQuote
-    |> Async.Start
+
 
 

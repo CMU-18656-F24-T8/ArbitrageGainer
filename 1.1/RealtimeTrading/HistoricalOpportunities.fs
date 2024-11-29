@@ -1,6 +1,6 @@
-module Controller.HistoricalOpportunities
+module RealtimeTrading.HistoricalOpportunities
 
-open Controller.RealtimeDataSocket
+open RealtimeTrading.RealtimeDataSocket
 open FSharp.Data
 
 // Static

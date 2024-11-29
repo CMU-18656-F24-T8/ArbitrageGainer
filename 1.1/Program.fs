@@ -1,15 +1,16 @@
 ﻿open System
 open System.Net.Http
+open Controller
 open Microsoft.FSharp.Core
 open Suave
 open Suave.Filters
 open Suave.Operators
 
-open Controller.RetrieveCrossTradedPair
+open RealtimeTrading.RetrieveCrossTradedPair
 open Controller.AnnualizedReturnCalculate
 open TradingStrategy.Service
 open TradingStrategy.Infrastructure
-open Controller.RealtimeTrading
+open RealtimeTrading.Service
 
 let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
 let pairs = ["XQ.BTC-USD"]  
@@ -28,6 +29,7 @@ let main argv =
               PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler strategyAgent 
               GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
               POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
+              POST >=> path "/realtime" >=> realtimeDataFeedBeginController 
             ]
     startWebServer defaultConfig app
     0

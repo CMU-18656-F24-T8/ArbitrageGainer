@@ -1,4 +1,4 @@
-﻿module Controller.RetrieveCrossTradedPair
+﻿module RealtimeTrading.RetrieveCrossTradedPair
 
 open System.Reflection.Metadata
 open System.Text.Json

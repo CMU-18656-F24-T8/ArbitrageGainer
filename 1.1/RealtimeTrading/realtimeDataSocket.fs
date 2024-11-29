@@ -1,4 +1,4 @@
-﻿module Controller.RealtimeDataSocket
+﻿module RealtimeTrading.RealtimeDataSocket
 
 open System
 open System.Net.WebSockets
@@ -6,6 +6,8 @@ open System.Text
 open System.Text.Json
 open System.Threading
 open System.Text.Json.Serialization
+
+open RealtimeTrading.Infrastructure
 
 // Domain types
 type Exchange = Exchange of int
@@ -172,26 +174,32 @@ module MarketDataService =
         
         let rec processMarketData (wsClient: ClientWebSocket) (state: DataFeedState) =
             async {
-                match! WebSocket.receiveMessage wsClient with
-                | Text message ->
-                    let quotes = MarketData.processMessage message
-                    let newCache = 
-                        quotes 
-                        |> List.fold QuoteCache.updateQuote state.Cache
-                    
-                    // Notify about updates, along with the cached quote
-                    let removedCache =
-                      quotes
-                      |> List.map (fun q -> (q, newCache))
-                      |> List.map onQuoteReceived
-                      |> List.fold QuoteCache.removeCachedQuote newCache
-                    
-                    return! processMarketData wsClient { state with Cache = removedCache }
-                | Close ->
-                    printfn "Market data feed connection closed."
-                    ()  // Return unit instead of state
-                | Other ->
-                    return! processMarketData wsClient state
+                let status = realTimeTradingStatusAgent.PostAndReply(GetStatus)
+                match status with
+                | "stopped" ->
+                    printfn "Real-time trading stopped."
+                    ()
+                | _ ->
+                    match! WebSocket.receiveMessage wsClient with
+                    | Text message ->
+                        let quotes = MarketData.processMessage message
+                        let newCache = 
+                            quotes 
+                            |> List.fold QuoteCache.updateQuote state.Cache
+                        
+                        // Notify about updates, along with the cached quote
+                        let removedCache =
+                          quotes
+                          |> List.map (fun q -> (q, newCache))
+                          |> List.map onQuoteReceived
+                          |> List.fold QuoteCache.removeCachedQuote newCache
+                        
+                        return! processMarketData wsClient { state with Cache = removedCache }
+                    | Close ->
+                        printfn "Market data feed connection closed."
+                        ()  // Return unit instead of state
+                    | Other ->
+                        return! processMarketData wsClient state
             }
         
         async {
