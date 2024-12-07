@@ -26,15 +26,16 @@ type Result<'T> =
 
 let calculateAnnualizedReturn (input: AnnualizedReturnInput) =
     try
-        if input.InitialInvestment <= 0.0 then
+        match input with
+        | _ when input.InitialInvestment <= 0.0 ->
             Error
                 { Message = "Initial investment must be greater than zero"
                   Code = 400 }
-        elif input.DurationInMonths <= 0.0 then
+        | _ when input.DurationInMonths <= 0.0 ->
             Error
                 { Message = "Duration must be greater than zero months"
                   Code = 400 }
-        else
+        | _ ->
             let durationInYears = input.DurationInMonths / 12.0
 
             let annualizedReturn =
@@ -54,11 +55,10 @@ let calculateAnnualizedReturnHandler =
             ctx.rawForm
             |> System.Text.Encoding.UTF8.GetString
             |> JsonConvert.DeserializeObject<AnnualizedReturnInput>
-        
+
         match calculateAnnualizedReturn input with
         | Success result -> OK(JsonConvert.SerializeObject(result))
         | Error error ->
             match error.Code with
             | 400 -> BAD_REQUEST error.Message
             | _ -> ServerErrors.INTERNAL_ERROR error.Message)
-
