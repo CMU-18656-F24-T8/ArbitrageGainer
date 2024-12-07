@@ -5,6 +5,8 @@ open Microsoft.FSharp.Core
 open Suave
 open Suave.Filters
 open Suave.Operators
+open System.Net
+open Suave.Sockets
 
 open RealtimeTrading.RetrieveCrossTradedPair
 open Controller.AnnualizedReturnCalculate
@@ -13,25 +15,29 @@ open TradingStrategy.Infrastructure
 open RealtimeTrading.Service
 
 let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
-let pairs = ["XQ.BTC-USD"]  
+let pairs = [ "XQ.BTC-USD" ]
 // SERVER SETUP
 
 [<EntryPoint>]
 let main argv =
     let httpClient = new HttpClient()
+
     let app =
         choose
-            [
-              POST >=> path "/trading_strategy" >=> setTradingStrategyHandler strategyAgent
+            [ POST >=> path "/trading_strategy" >=> setTradingStrategyHandler strategyAgent
               GET >=> path "/trading_strategy" >=> getTradingStrategyHandler strategyAgent
               POST >=> path "/email" >=> setEmailHandler strategyAgent
               GET >=> path "/email" >=> getEmailHandler strategyAgent
-              PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler strategyAgent 
+              PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler strategyAgent
               GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
               POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
-              POST >=> path "/realtime" >=> realtimeDataFeedBeginController 
-            ]
-    startWebServer defaultConfig app
+              POST >=> path "/realtime" >=> realtimeDataFeedBeginController ]
+
+    let serverConfig =
+        { defaultConfig with
+            bindings = [ HttpBinding.create HTTP (IPAddress.Any) (uint16 8080) ] }
+
+    startWebServer serverConfig app
     0
 
 
