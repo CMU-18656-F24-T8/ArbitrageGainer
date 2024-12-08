@@ -39,11 +39,19 @@ PLEASE REFER TO 1.1 as the code base.
 
 ### Database Access
 
+Our database utilizes Azure Cosmos DB Table cloud service.
+The following specifies the access to database:
+* Account Name: arbitrage-db
+* Endpoint: https://arbitrage-db.table.cosmos.azure.com:443
+* Key: \*\*\*\*\*\*\*\* (see key in the code)
+
 ### Run the Application with Docker
+
+*TODO*
 
 ### Performance Mesurements
 
-
+*TODO*
 
 
 ## External Links
