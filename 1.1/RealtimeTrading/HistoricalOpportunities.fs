@@ -2,10 +2,13 @@ module RealtimeTrading.HistoricalOpportunities
 
 open RealtimeTrading.RealtimeDataSocket
 open FSharp.Data
+open Suave.Logging
+open Util.Logger
 
 // Static
 let TEXT_FILE = "/app/Data/historicalData.txt"
 let BUCKET_SIZE = 5L // milliseconds
+
 
 type Quotes = JsonProvider<"""[{"ev":"XQ","pair":"MKR-USD","lp":0.0,"ls":0.0,"bp":1012.5,"bs":50.0,"ap":1010.5,
 "as":50.0,"t":1690409119848,"x":2,"r":1690409119856}]""">
@@ -63,12 +66,14 @@ let getTopNOpportunities =
         match !cache with
         | Some (cachedN, cachedResult) when cachedN = n -> cachedResult
         | _ ->
+            logger <| sprintf "Computing top %d opportunities" n
             let result =
                 opportunitiesPerPair
                 |> Seq.sortByDescending snd
                 |> Seq.take n
                 |> Seq.map (fun (pair, _) -> CurrencyPair pair)
                 |> Seq.toList
+            logger <| sprintf "Top %d opportunities computed" n
             cache := Some (n, result)
             result
     cachedFunction

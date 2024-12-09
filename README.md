@@ -47,7 +47,46 @@ The following specifies the access to database:
 
 ### Run the Application with Docker
 
-*TODO*
+1. Pull the docker image and run the container
+
+    ```bash
+    docker pull ziyuew2/18656_8
+    docker run -p 8080:8080 arbitragegainer/arbitragegainer
+    ```
+
+1. Set up the trading strategy
+
+    ```bash
+    curl --location 'http://127.0.0.1:8080/trading_strategy' \
+    --data '{
+        "NumberOfCryptos": 5,
+        "MinPriceSpread": 0.05,
+        "MinTransactionProfit": 5,
+        "MaxTransactionValue": 2000,
+        "MaxTradingValue": 5000,
+        "InitialInvestment": 2000.0
+      }'
+    ```
+
+1. Set email for notification
+
+    ```bash
+    curl --location 'http://127.0.0.1:8080/email' \
+    --data 'pkotchav@andrew.cmu.edu'
+    ```
+
+1. Get historical arbitrage opportunities
+
+    ```bash
+    curl --location --request GET 'http://127.0.0.1:8080/historical'
+    ```
+
+1. Get cross-traded currency pairs
+
+    ```bash
+    curl --location 'http://127.0.0.1:8080/crosstrade'
+    ```
+
 
 ### Performance Mesurements
 
