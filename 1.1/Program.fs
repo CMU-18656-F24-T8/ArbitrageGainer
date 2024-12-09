@@ -13,6 +13,7 @@ open Controller.AnnualizedReturnCalculate
 open TradingStrategy.Service
 open TradingStrategy.Infrastructure
 open RealtimeTrading.Service
+open Controller.PLCalculation
 
 let apiKey = "OZpD8OUeBy5zWFQ5v3Hd_BEopvquAvSt"
 let pairs = [ "XQ.BTC-USD" ]
@@ -21,6 +22,7 @@ let pairs = [ "XQ.BTC-USD" ]
 [<EntryPoint>]
 let main argv =
     let httpClient = new HttpClient()
+    let plAgent = createPLAgent()
 
     let app =
         choose
@@ -32,6 +34,9 @@ let main argv =
               GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
               POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
               POST >=> path "/realtime" >=> realtimeDataFeedBeginController
+              POST >=> path "/api/pl/calculate" >=> calculatePLHandler plAgent
+              POST >=> path "/api/pl/threshold" >=> updateThresholdHandler plAgent
+              GET >=> path "/api/pl/current" >=> getCurrentPLHandler plAgent 
               GET >=> path "/historical" >=> getHistoricalOpportunitiesController ]
 
     let serverConfig =
