@@ -7,6 +7,8 @@ open Suave.Operators
 open Suave.Successful
 open Suave.RequestErrors
 open Newtonsoft.Json
+open Util.DAC
+open RealtimeTrading.Core
 
 // Core Domain Types
 type OrderType = Buy | Sell
@@ -43,40 +45,65 @@ type PLError =
     | UserNotFound
     | CalculationError
     | InvalidOrderState
+    | StorageError of string
+    | InvalidRequest of string
 
 type Result<'T> = 
     | Ok of 'T 
     | Error of PLError
 
-// Agent Messages
+// P&L Agent Messages
 type PLMessage =
-    | CalculatePL of AsyncReplyChannel<Result<decimal>>
-    | UpdateThreshold of decimal option * AsyncReplyChannel<Result<unit>>
-    | GetCurrentPL of AsyncReplyChannel<Result<decimal>>
+    | StartTracking of UserId
+    | StopTracking of UserId
+    | UpdateTrade of MatchedTrade
+    | CalculatePL of UserId * AsyncReplyChannel<Result<decimal>>
+    | UpdateThreshold of UserId * decimal option * AsyncReplyChannel<Result<unit>>
+    | GetCurrentPL of UserId * AsyncReplyChannel<Result<decimal>>
+    | CalculateHistoricalPL of UserId * DateTime * DateTime * AsyncReplyChannel<Result<decimal>>
 
-// Agent State
-type PLState = {
+// P&L State
+type UserPLInfo = {
     CurrentValue: decimal
     Threshold: decimal option
+    IsTracking: bool
+    LastUpdate: DateTime
 }
 
-// API Types for Requests/Responses
+type PLState = {
+    UserPLs: Map<UserId, UserPLInfo>
+    LastCalculation: DateTime
+}
+
+// API Types
 type PLCalculateRequest = {
-    Trades: MatchedTrade list
+    UserId: int64
+    StartDate: DateTime option
+    EndDate: DateTime option
 }
 
 type PLResponse = {
+    UserId: int64
     Value: decimal
     Timestamp: DateTime
     IsThresholdBreached: bool option
 }
 
 type ThresholdUpdateRequest = {
+    UserId: int64
     Target: decimal option
 }
 
-// JSON helpers
-let toJson v = JsonConvert.SerializeObject v
+type PLRecord = {
+    UserId: int64
+    Value: decimal
+    Threshold: decimal option
+    Timestamp: DateTime
+    OrderId: int64 option
+}
+
+// JSON Helpers
+let toJson v = JsonConvert.SerializeObject(v, Formatting.Indented)
 let fromJson<'T> json = JsonConvert.DeserializeObject<'T>(json)
 
 // Core calculation module
@@ -106,58 +133,171 @@ module PLCalculation =
         |> List.map calculateTradePL
         |> List.fold folder (Ok 0M)
 
-    let isThresholdReached (threshold: decimal) (currentPL: decimal) : bool =
-        currentPL >= threshold
+    let isThresholdBreached (threshold: decimal option) (currentPL: decimal) : bool option =
+        threshold |> Option.map (fun t -> currentPL >= t)
 
-// Agent handler
-let plAgent (strategyAgent: MailboxProcessor<_>) = 
+// Storage module
+module Storage =
+    let savePLRecord (record: PLRecord) = 
+        let partitionKey = sprintf "PL_%d" record.UserId
+        let rowKey = DateTime.UtcNow.Ticks.ToString()
+        async {
+            let! result = UpsertTable<PLRecord> partitionKey record rowKey
+            return
+                match result with
+                | Ok _ -> Ok ()
+                | Error msg -> Error (StorageError msg)
+        }
+
+    let saveThreshold userId threshold =
+        let partitionKey = sprintf "PLThreshold_%d" userId
+        let rowKey = DateTime.UtcNow.Ticks.ToString()
+        async {
+            let! result = UpsertTableString partitionKey (
+                match threshold with 
+                | Some t -> t.ToString()
+                | None -> "null"
+            ) rowKey
+            return
+                match result with
+                | Ok _ -> Ok ()
+                | Error msg -> Error (StorageError msg)
+        }
+
+// PL Agent Implementation
+let createPLAgent () = 
     MailboxProcessor.Start(fun inbox ->
         let rec loop (state: PLState) = async {
             let! msg = inbox.Receive()
             
             match msg with
-            | CalculatePL reply ->
-                // In real implementation, get trades from strategyAgent
-                let dummyTrade = {
-                    OrderId = OrderId 1L
-                    UserId = UserId 1L
-                    Type = Buy
-                    Amount = Amount 100M
-                    Price = Price 10M
-                    MatchedAmount = Amount 100M
-                    MatchedPrice = Price 15M
-                    Status = FullyMatched
-                    Timestamp = DateTime.UtcNow
-                }
-                
-                let result = PLCalculation.calculateTradePL dummyTrade
-                reply.Reply(result)
+            | StartTracking userId ->
+                let newUserPLs =
+                    match Map.tryFind userId state.UserPLs with
+                    | Some info -> 
+                        Map.add userId { info with IsTracking = true } state.UserPLs
+                    | None -> 
+                        Map.add userId {
+                            CurrentValue = 0M
+                            Threshold = None
+                            IsTracking = true
+                            LastUpdate = DateTime.UtcNow
+                        } state.UserPLs
+                return! loop { state with UserPLs = newUserPLs }
+
+            | StopTracking userId ->
+                let newUserPLs =
+                    match Map.tryFind userId state.UserPLs with
+                    | Some info -> 
+                        Map.add userId { info with IsTracking = false } state.UserPLs
+                    | None -> state.UserPLs
+                return! loop { state with UserPLs = newUserPLs }
+
+            | UpdateTrade trade ->
+                try
+                    let tradePLResult = PLCalculation.calculateTradePL trade
+                    match tradePLResult with
+                    | Ok tradePL ->
+                        let! storageResult = 
+                            let plRecord = {
+                                UserId = match trade.UserId with UserId id -> id
+                                Value = tradePL
+                                Threshold = None
+                                Timestamp = DateTime.UtcNow
+                                OrderId = Some(match trade.OrderId with OrderId id -> id)
+                            }
+                            Storage.savePLRecord plRecord
+
+                        match storageResult with
+                        | Ok _ ->
+                            let newUserPLs =
+                                match Map.tryFind trade.UserId state.UserPLs with
+                                | Some info when info.IsTracking ->
+                                    Map.add trade.UserId 
+                                        { info with 
+                                            CurrentValue = info.CurrentValue + tradePL
+                                            LastUpdate = DateTime.UtcNow 
+                                        } state.UserPLs
+                                | _ -> state.UserPLs
+                            return! loop { state with UserPLs = newUserPLs }
+                        | Error _ ->
+                            return! loop state
+                    | Error _ ->
+                        return! loop state
+                with _ ->
+                    return! loop state
+
+            | CalculatePL (userId, reply) ->
+                match Map.tryFind userId state.UserPLs with
+                | Some info when info.IsTracking ->
+                    reply.Reply(Ok info.CurrentValue)
+                | Some _ ->
+                    reply.Reply(Error (InvalidRequest "P&L tracking is not active for this user"))
+                | None ->
+                    reply.Reply(Error UserNotFound)
                 return! loop state
-                
-            | UpdateThreshold (threshold, reply) ->
+
+            | UpdateThreshold (userId, threshold, reply) ->
                 match threshold with
                 | Some value when value <= 0M ->
                     reply.Reply(Error InvalidThreshold)
                 | _ ->
-                    let newState = { state with Threshold = threshold }
-                    reply.Reply(Ok())
-                    return! loop newState
-                    
-            | GetCurrentPL reply ->
-                reply.Reply(Ok state.CurrentValue)
+                    let! storageResult = 
+                        Storage.saveThreshold 
+                            (match userId with UserId id -> id) 
+                            threshold
+                    match storageResult with
+                    | Ok _ ->
+                        let newUserPLs =
+                            match Map.tryFind userId state.UserPLs with
+                            | Some info ->
+                                Map.add userId { info with Threshold = threshold } state.UserPLs
+                            | None ->
+                                Map.add userId {
+                                    CurrentValue = 0M
+                                    Threshold = threshold
+                                    IsTracking = false
+                                    LastUpdate = DateTime.UtcNow
+                                } state.UserPLs
+                        reply.Reply(Ok())
+                        return! loop { state with UserPLs = newUserPLs }
+                    | Error e ->
+                        reply.Reply(Error e)
+                        return! loop state
+
+            | GetCurrentPL (userId, reply) ->
+                match Map.tryFind userId state.UserPLs with
+                | Some info -> reply.Reply(Ok info.CurrentValue)
+                | None -> reply.Reply(Error UserNotFound)
+                return! loop state
+
+            | CalculateHistoricalPL (userId, startDate, endDate, reply) ->
+                // In a real implementation, this would fetch historical trades from storage
+                reply.Reply(Ok 0M)
                 return! loop state
         }
         
-        loop { CurrentValue = 0M; Threshold = None })
+        loop { 
+            UserPLs = Map.empty
+            LastCalculation = DateTime.UtcNow
+        }
+    )
 
-// Suave handlers
+// Suave Handlers
 let calculatePLHandler (agent: MailboxProcessor<PLMessage>) =
     warbler (fun ctx ->
         try
-            let result = agent.PostAndReply(fun reply -> CalculatePL reply)
+            let body = System.Text.Encoding.UTF8.GetString(ctx.request.rawForm)
+            let request = fromJson<PLCalculateRequest> body
+            let userId = UserId request.UserId
+            
+            let result = 
+                agent.PostAndReply(fun reply -> CalculatePL(userId, reply))
+            
             match result with
             | Ok value ->
                 let response = {
+                    UserId = request.UserId
                     Value = value
                     Timestamp = DateTime.UtcNow
                     IsThresholdBreached = None
@@ -167,45 +307,58 @@ let calculatePLHandler (agent: MailboxProcessor<PLMessage>) =
             | Error err -> 
                 BAD_REQUEST (sprintf "Error calculating PL: %A" err)
         with ex ->
-            BAD_REQUEST ex.Message)
+            BAD_REQUEST ex.Message
+    )
 
 let updateThresholdHandler (agent: MailboxProcessor<PLMessage>) =
     warbler (fun ctx ->
         try
             let body = System.Text.Encoding.UTF8.GetString(ctx.request.rawForm)
             let request = fromJson<ThresholdUpdateRequest> body
+            let userId = UserId request.UserId
             
             let result = agent.PostAndReply(fun reply -> 
-                UpdateThreshold(request.Target, reply))
+                UpdateThreshold(userId, request.Target, reply))
             
             match result with
             | Ok _ ->
-                OK (toJson {| Success = true; NewThreshold = request.Target |})
+                OK (toJson {| Success = true; UserId = request.UserId; NewThreshold = request.Target |})
                 >=> Writers.setMimeType "application/json; charset=utf-8"
             | Error err -> 
                 BAD_REQUEST (sprintf "Error updating threshold: %A" err)
         with ex ->
-            BAD_REQUEST ex.Message)
+            BAD_REQUEST ex.Message
+    )
 
 let getCurrentPLHandler (agent: MailboxProcessor<PLMessage>) =
-    warbler (fun _ ->
-        let result = agent.PostAndReply(fun reply -> GetCurrentPL reply)
-        match result with
-        | Ok value ->
-            let response = {
-                Value = value
-                Timestamp = DateTime.UtcNow
-                IsThresholdBreached = None
-            }
-            OK (toJson response)
-            >=> Writers.setMimeType "application/json; charset=utf-8"
-        | Error err -> 
-            BAD_REQUEST (sprintf "Error getting current PL: %A" err))
+    warbler (fun ctx ->
+        try
+            match ctx.request.queryParam "userId" with
+            | Choice1Of2 userIdStr ->
+                match Int64.TryParse userIdStr with
+                | true, userId ->
+                    let result = 
+                        agent.PostAndReply(fun reply -> 
+                            GetCurrentPL(UserId userId, reply))
+                    match result with
+                    | Ok value ->
+                        let response = {
+                            UserId = userId
+                            Value = value
+                            Timestamp = DateTime.UtcNow
+                            IsThresholdBreached = None
+                        }
+                        OK (toJson response)
+                        >=> Writers.setMimeType "application/json; charset=utf-8"
+                    | Error err -> 
+                        BAD_REQUEST (sprintf "Error getting current PL: %A" err)
+                | false, _ ->
+                    BAD_REQUEST "Invalid userId format"
+            | Choice2Of2 _ ->
+                BAD_REQUEST "Missing userId parameter"
+        with ex ->
+            BAD_REQUEST ex.Message
+    )
 
-// Main webpart
-let plWebPart (agent: MailboxProcessor<PLMessage>) =
-    choose [
-        POST >=> path "/pl/calculate" >=> calculatePLHandler agent
-        POST >=> path "/pl/threshold" >=> updateThresholdHandler agent
-        GET >=> path "/pl/current" >=> getCurrentPLHandler agent
-    ]
+// Exports
+let plAgent = createPLAgent()
