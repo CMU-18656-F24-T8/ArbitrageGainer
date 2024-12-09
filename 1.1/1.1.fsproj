@@ -15,6 +15,7 @@
     <Compile Include="TradingStrategy\Service.fs" />
     <Compile Include="Controller\annualizedReturnCalculate.fs" />
     <Content Include="Datas\tradingWebsites.json" />
+    <Content Include="Datas\mockTradingWebsite.json" />
     <Compile Include="RealtimeTrading\Core.fs" />
     <Compile Include="RealtimeTrading\Infrastructure.fs" />
     <Compile Include="RealtimeTrading\orderPlacementHandler.fs" />
