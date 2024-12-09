@@ -35,7 +35,9 @@ PLEASE REFER TO 1.1 as the code base.
 1. `GET /historical`
 
 #### P&L Management
-
+1. `POST /api/pl/calculate`
+2. `POST /api/pl/threshold`
+3. `GET /api/pl/current`
 
 ### Database Access
 
@@ -100,7 +102,32 @@ The following specifies the access to database:
     curl --location 'http://127.0.0.1:8080/realtime' \
     --data 'stop'
     ```
+1. Calculate P&L for a user
+   
+    ```bash
+    curl --location 'http://127.0.0.1:8080/api/pl/calculate' \
+    --header 'Content-Type: application/json' \
+    --data '{
+    "userId": 1
+    }'
+    ```
+    
+1. Set P&L threshold  
 
+   ```bash
+    curl --location 'http://127.0.0.1:8080/api/pl/threshold' \
+    --header 'Content-Type: application/json' \
+    --data '{
+        "userId": 1,
+        "target": 1000.00
+    }'
+    ```
+
+1. Get current P&L
+
+   ```bash
+    curl --location 'http://127.0.0.1:8080/api/pl/current?userId=1'
+    ```   
 
 ### Performance Mesurements
 
