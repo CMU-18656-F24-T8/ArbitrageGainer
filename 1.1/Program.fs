@@ -31,7 +31,8 @@ let main argv =
               PATCH >=> path "/trading_strategy" >=> setMaxTradingValueHandler strategyAgent
               GET >=> path "/crosstrade" >=> retrieveCrossTradedPairsHandler
               POST >=> path "/annualized_return" >=> calculateAnnualizedReturnHandler
-              POST >=> path "/realtime" >=> realtimeDataFeedBeginController ]
+              POST >=> path "/realtime" >=> realtimeDataFeedBeginController
+              GET >=> path "/historical" >=> getHistoricalOpportunitiesController ]
 
     let serverConfig =
         { defaultConfig with

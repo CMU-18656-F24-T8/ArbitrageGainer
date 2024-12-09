@@ -32,3 +32,9 @@ let realtimeDataFeedBeginController =
                 realTimeTradingStatusAgent.Post(Stop)
                 OK "Realtime trading stopped"
             | _ -> BAD_REQUEST "Invalid request")
+    
+let getHistoricalOpportunitiesController =
+    request (fun ctx ->
+        let strategy = getTradingStrategy strategyAgent
+        let pairs = getTopNOpportunities strategy.NumberOfCryptos
+        OK(JsonConvert.SerializeObject(pairs)))

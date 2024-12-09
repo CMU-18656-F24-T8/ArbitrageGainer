@@ -4,7 +4,7 @@ open RealtimeTrading.RealtimeDataSocket
 open FSharp.Data
 
 // Static
-let TEXT_FILE = "/Users/harry/Desktop/CMU/course/18656_functional_programing/M2I/historicalData.txt"
+let TEXT_FILE = "/app/Data/historicalData.txt"
 let BUCKET_SIZE = 5L // milliseconds
 
 type Quotes = JsonProvider<"""[{"ev":"XQ","pair":"MKR-USD","lp":0.0,"ls":0.0,"bp":1012.5,"bs":50.0,"ap":1010.5,
@@ -57,9 +57,18 @@ let opportunitiesPerPair =
         let totalOpportunities = ops |> Seq.sumBy snd
         (pair, totalOpportunities))
 
-let getTopNOpportunities n =
-    opportunitiesPerPair
-    |> Seq.sortByDescending snd
-    |> Seq.take n
-    |> Seq.map (fun (pair, _) -> CurrencyPair pair)
-    |> Seq.toList
+let getTopNOpportunities =
+    let cache = ref None
+    let cachedFunction n =
+        match !cache with
+        | Some (cachedN, cachedResult) when cachedN = n -> cachedResult
+        | _ ->
+            let result =
+                opportunitiesPerPair
+                |> Seq.sortByDescending snd
+                |> Seq.take n
+                |> Seq.map (fun (pair, _) -> CurrencyPair pair)
+                |> Seq.toList
+            cache := Some (n, result)
+            result
+    cachedFunction
