@@ -53,7 +53,7 @@ The following specifies the access to database:
 
     ```bash
     docker pull ziyuew2/18656_8
-    docker run -p 8080:8080 arbitragegainer/arbitragegainer
+    docker run -p 8080:8080 ziyuew2/18656_8:latest
     ```
 
 1. Set up the trading strategy
