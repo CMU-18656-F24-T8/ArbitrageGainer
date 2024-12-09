@@ -87,10 +87,26 @@ The following specifies the access to database:
     curl --location 'http://127.0.0.1:8080/crosstrade'
     ```
 
+1. Start realtime trading
+
+    ```bash
+    curl --location 'http://127.0.0.1:8080/realtime' \
+    --data 'start'
+    ```
+
+1. Stop realtime trading
+
+    ```bash
+    curl --location 'http://127.0.0.1:8080/realtime' \
+    --data 'stop'
+    ```
+
 
 ### Performance Mesurements
 
-*TODO*
+*	Historical Arbitrage Analysis Time: ~168 ms
+*	Cross-Traded Currencies Identification Time: ~417 ms
+*	Time to First Order: ~6.2 seconds
 
 
 ## External Links
