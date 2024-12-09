@@ -12,8 +12,6 @@ open System.Text
 open Newtonsoft.Json
 open Util
 open Util.DAC
-open Util.ParseTradingWebsite
-
 
 let httpClient = new HttpClient()
 

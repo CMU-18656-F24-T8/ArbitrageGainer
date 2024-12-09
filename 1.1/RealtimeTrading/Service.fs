@@ -15,7 +15,7 @@ open Util.Logger
 
 let subscribeToQuotes (apiKey: string) (endpoint: string) =
     let strategy = getTradingStrategy strategyAgent
-    let pairs = getTopNOpportunities strategy.NumberOfCryptos
+    let pairs = getTopNOpportunities strategy.NumberOfCryptos |> Async.RunSynchronously
     MarketDataService.subscribeToMarketData endpoint apiKey pairs handleQuote
     |> Async.Start
 
@@ -39,5 +39,5 @@ let realtimeDataFeedBeginController =
 let getHistoricalOpportunitiesController =
     request (fun ctx ->
         let strategy = getTradingStrategy strategyAgent
-        let pairs = getTopNOpportunities strategy.NumberOfCryptos
+        let pairs = getTopNOpportunities strategy.NumberOfCryptos |> Async.RunSynchronously
         OK(JsonConvert.SerializeObject(pairs)))

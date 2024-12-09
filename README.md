@@ -104,9 +104,9 @@ The following specifies the access to database:
 
 ### Performance Mesurements
 
-*	Historical Arbitrage Analysis Time: ~168 ms
-*	Cross-Traded Currencies Identification Time: ~417 ms
-*	Time to First Order: ~6.2 seconds
+*	Historical Arbitrage Analysis Time: 168 ms
+*	Cross-Traded Currencies Identification Time: 417 ms
+*	Time to First Order: 6.323 seconds
 
 
 ## External Links

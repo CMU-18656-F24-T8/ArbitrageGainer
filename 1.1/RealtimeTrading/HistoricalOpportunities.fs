@@ -4,7 +4,9 @@ open RealtimeTrading.RealtimeDataSocket
 open FSharp.Data
 open Suave.Logging
 open Util.Logger
-
+open Util.DAC
+open Newtonsoft.Json
+open RealtimeTrading.Infrastructure
 // Static
 let TEXT_FILE = "/app/Data/historicalData.txt"
 let BUCKET_SIZE = 5L // milliseconds
@@ -59,21 +61,25 @@ let opportunitiesPerPair =
     |> Seq.map (fun (pair, ops) ->
         let totalOpportunities = ops |> Seq.sumBy snd
         (pair, totalOpportunities))
+    
+let calcTopNOpportunities n =
+    opportunitiesPerPair
+    |> Seq.sortByDescending snd
+    |> Seq.take n
+    |> Seq.map (fun (pair, _) -> CurrencyPair pair)
+    |> Seq.toList
 
-let getTopNOpportunities =
-    let cache = ref None
-    let cachedFunction n =
-        match !cache with
-        | Some (cachedN, cachedResult) when cachedN = n -> cachedResult
-        | _ ->
-            logger <| sprintf "Computing top %d opportunities" n
-            let result =
-                opportunitiesPerPair
-                |> Seq.sortByDescending snd
-                |> Seq.take n
-                |> Seq.map (fun (pair, _) -> CurrencyPair pair)
-                |> Seq.toList
-            logger <| sprintf "Top %d opportunities computed" n
-            cache := Some (n, result)
-            result
-    cachedFunction
+let getTopNOpportunities n = async {
+    let! oppStr = LoadStringFromDB "opportunities" (string n)
+    printfn "oppStr: %A" oppStr
+    match oppStr with
+    | Ok str -> 
+        return JsonConvert.DeserializeObject<CurrencyPair list>(str)
+    | _ ->
+        logger "Start calculating top opportunities"
+        let res = calcTopNOpportunities n
+        logger "Finish calculating top opportunities"
+        let resStr = JsonConvert.SerializeObject res
+        WriteJsonToTableRow "opportunities" (string n) resStr |> ignore
+        return res
+}
