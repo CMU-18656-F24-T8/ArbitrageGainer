@@ -1,0 +1,17 @@
+﻿{
+  "Bitstamp": {
+    "buy": "https://one8656-testing-server.onrender.com/order/place/api/v2/buy/market/{market_symbol}/",
+    "sell": "https://one8656-testing-server.onrender.com/order/place/api/v2/sell/market/{market_symbol}/",
+    "retrieve": "https://one8656-testing-server.onrender.com/order/status/api/v2/order_status/"
+  },
+  "Kraken": {
+    "buy": "https://one8656-testing-server.onrender.com/order/place/0/private/AddOrder",
+    "sell": "https://one8656-testing-server.onrender.com/order/place/0/private/AddOrder",
+    "retrieve": "https://one8656-testing-server.onrender.com/order/status/0/private/QueryOrders"
+  },
+  "Bitfinex": {
+    "buy": "https://one8656-testing-server.onrender.com/order/place/v2/auth/w/order/submit",
+    "sell": "https://one8656-testing-server.onrender.com/order/place/v2/auth/w/order/submit",
+    "retrieve": "https://one8656-testing-server.onrender.com/order/status/auth/r/order/{symbol}:{id}/trades"
+  }
+}
