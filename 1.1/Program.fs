@@ -36,7 +36,8 @@ let main argv =
               POST >=> path "/realtime" >=> realtimeDataFeedBeginController
               POST >=> path "/api/pl/calculate" >=> calculatePLHandler plAgent
               POST >=> path "/api/pl/threshold" >=> updateThresholdHandler plAgent
-              GET >=> path "/api/pl/current" >=> getCurrentPLHandler plAgent ]
+              GET >=> path "/api/pl/current" >=> getCurrentPLHandler plAgent 
+              GET >=> path "/historical" >=> getHistoricalOpportunitiesController ]
 
     let serverConfig =
         { defaultConfig with

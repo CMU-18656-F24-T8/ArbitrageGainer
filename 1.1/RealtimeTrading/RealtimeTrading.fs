@@ -4,6 +4,7 @@ open RealtimeTrading.HistoricalOpportunities
 open RealtimeTrading.RealtimeDataSocket
 open TradingStrategy.Infrastructure
 open RealtimeTrading.orderPlacementHandler
+open Util.Logger
 
 // Get most arbitrage opportunities in the past
 
@@ -74,6 +75,7 @@ let handleQuote quote =
                 orderHandler (toCryptoQuoteOnTransact highestBid) (toCryptoQuoteOnTransact lowestAsk) |> ignore
                 
                 printfn "Orders Placed"
+                logger <| sprintf "submitting order"
                 printfn "%A, %A, %M, %f" msg.pair lowestAsk.Exchange lowestAsk.Price maxTradingSize
                 printfn "%A, %A, %M, %f" msg.pair highestBid.Exchange highestBid.Price maxTradingSize
                 // update total transaction value
