@@ -81,18 +81,32 @@ let fetchAllCrossTradedExchangeData ()=
         | ex -> return Error (ParsingError "Error")
     }
 
+let retrieveData=
+    async {
+        try
+            let! entity = table.GetEntityAsync<TableEntity>("common", "crossTradedPairs") |> Async.AwaitTask
+            return Some (entity.Value.ToString())
+        with
+        | :? Azure.RequestFailedException as ex when ex.Status = 404 ->
+            printfn "Entity not found: %s" ex.Message
+            return None
+    }
 
 let retrieveCrossTradedPairsHandler (ctx: HttpContext) : Async<HttpContext option> = 
     async {
-        let saver = DAC.UpsertTableString "common"
-        logger "retrieveCrossTradedPairsHandler Start"
-        let! task = fetchAllCrossTradedExchangeData ()
-        logger "retrieveCrossTradedPairsHandler End"
-        
+        let databaseResult = retrieveData |> Async.RunSynchronously
+        match databaseResult with
+        | Some entity-> return! Successful.OK entity ctx
+        | None ->
+                let saver = DAC.UpsertTableString "common"
+                logger "retrieveCrossTradedPairsHandler Start"
+                let! task = fetchAllCrossTradedExchangeData ()
+                logger "retrieveCrossTradedPairsHandler End"
+                
 
-        match task with
-        | Ok pairs->
-            (saver (System.Text.Json.JsonSerializer.Serialize(pairs)) "crossTradedPairs") |>Async.RunSynchronously  |> ignore
-            return! Successful.OK (JsonConvert.SerializeObject(pairs)) ctx
-        | Error err -> return! BAD_REQUEST "Error" ctx
+                match task with
+                | Ok pairs->
+                    (saver (System.Text.Json.JsonSerializer.Serialize(pairs)) "crossTradedPairs") |>Async.RunSynchronously  |> ignore
+                    return! Successful.OK (JsonConvert.SerializeObject(pairs)) ctx
+                | Error err -> return! BAD_REQUEST "Error" ctx
     }
