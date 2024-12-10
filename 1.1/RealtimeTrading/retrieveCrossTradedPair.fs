@@ -85,7 +85,7 @@ let retrieveData=
     async {
         try
             let! entity = table.GetEntityAsync<TableEntity>("common", "crossTradedPairs") |> Async.AwaitTask
-            return Some (entity.Value.ToString())
+            return Some (entity.Value.GetString("Value"))
         with
         | :? Azure.RequestFailedException as ex when ex.Status = 404 ->
             printfn "Entity not found: %s" ex.Message
