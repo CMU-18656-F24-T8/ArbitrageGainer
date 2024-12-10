@@ -14,6 +14,7 @@ open FSharp.Data
 open Util
 open Util.ExchangeDataParser
 open Util.DAC
+open Util.Logger
 
 let httpClient = new HttpClient()
 
@@ -84,7 +85,9 @@ let fetchAllCrossTradedExchangeData ()=
 let retrieveCrossTradedPairsHandler (ctx: HttpContext) : Async<HttpContext option> = 
     async {
         let saver = DAC.UpsertTableString "common"
+        logger "retrieveCrossTradedPairsHandler Start"
         let! task = fetchAllCrossTradedExchangeData ()
+        logger "retrieveCrossTradedPairsHandler End"
         
 
         match task with
