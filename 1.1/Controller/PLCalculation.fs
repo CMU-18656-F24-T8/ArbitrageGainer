@@ -45,22 +45,17 @@ type PLError =
     | UserNotFound
     | CalculationError
     | InvalidOrderState
-    | StorageError of string
     | InvalidRequest of string
-
-type Result<'T> = 
-    | Ok of 'T 
-    | Error of PLError
 
 // P&L Agent Messages
 type PLMessage =
     | StartTracking of UserId
     | StopTracking of UserId
     | UpdateTrade of MatchedTrade
-    | CalculatePL of UserId * AsyncReplyChannel<Result<decimal>>
-    | UpdateThreshold of UserId * decimal option * AsyncReplyChannel<Result<unit>>
-    | GetCurrentPL of UserId * AsyncReplyChannel<Result<decimal>>
-    | CalculateHistoricalPL of UserId * DateTime * DateTime * AsyncReplyChannel<Result<decimal>>
+    | CalculatePL of UserId * AsyncReplyChannel<Result<decimal, PLError>>
+    | UpdateThreshold of UserId * decimal option * AsyncReplyChannel<Result<unit, PLError>>
+    | GetCurrentPL of UserId * AsyncReplyChannel<Result<decimal, PLError>>
+    | CalculateHistoricalPL of UserId * DateTime * DateTime * AsyncReplyChannel<Result<decimal, PLError>>
 
 // P&L State
 type UserPLInfo = {
@@ -108,7 +103,7 @@ let fromJson<'T> json = JsonConvert.DeserializeObject<'T>(json)
 
 // Core calculation module
 module PLCalculation =
-    let calculateTradePL (trade: MatchedTrade) : Result<decimal> =
+    let calculateTradePL (trade: MatchedTrade) : Result<decimal, PLError> =
         match trade.Status with
         | Unmatched -> Error InvalidOrderState
         | FullyMatched | PartiallyMatched _ ->
@@ -122,7 +117,7 @@ module PLCalculation =
                 | Sell -> amount * (price - matchedPrice)
             Ok pl
 
-    let calculateTotalPL (trades: MatchedTrade list) : Result<decimal> =
+    let calculateTotalPL (trades: MatchedTrade list) : Result<decimal, PLError> =
         let folder state tradeResult =
             match state, tradeResult with
             | Ok acc, Ok value -> Ok (acc + value)
@@ -136,33 +131,26 @@ module PLCalculation =
     let isThresholdBreached (threshold: decimal option) (currentPL: decimal) : bool option =
         threshold |> Option.map (fun t -> currentPL >= t)
 
-// Storage module
 module Storage =
     let savePLRecord (record: PLRecord) = 
         let partitionKey = sprintf "PL_%d" record.UserId
         let rowKey = DateTime.UtcNow.Ticks.ToString()
-        async {
-            let! result = UpsertTable<PLRecord> partitionKey record rowKey
-            return
-                match result with
-                | Ok _ -> Ok ()
-                | Error msg -> Error (StorageError msg)
-        }
+        UpsertTable<PLRecord> partitionKey record rowKey
 
-    let saveThreshold userId threshold =
+    let saveThreshold (userId: int64) (threshold: decimal option) =
         let partitionKey = sprintf "PLThreshold_%d" userId
         let rowKey = DateTime.UtcNow.Ticks.ToString()
-        async {
-            let! result = UpsertTableString partitionKey (
-                match threshold with 
-                | Some t -> t.ToString()
-                | None -> "null"
-            ) rowKey
-            return
-                match result with
-                | Ok _ -> Ok ()
-                | Error msg -> Error (StorageError msg)
-        }
+        let valueToSave = 
+            match threshold with 
+            | Some t -> t.ToString()
+            | None -> "null"
+        UpsertTableString partitionKey valueToSave rowKey
+
+// Conversion helpers
+let mapStorageResult (res: Result<string, string>) : Result<unit, PLError> =
+    match res with
+    | Ok _ -> Ok ()
+    | Error msg -> Error (InvalidRequest msg)
 
 // PL Agent Implementation
 let createPLAgent () = 
@@ -208,7 +196,7 @@ let createPLAgent () =
                             }
                             Storage.savePLRecord plRecord
 
-                        match storageResult with
+                        match mapStorageResult storageResult with
                         | Ok _ ->
                             let newUserPLs =
                                 match Map.tryFind trade.UserId state.UserPLs with
@@ -241,12 +229,11 @@ let createPLAgent () =
                 match threshold with
                 | Some value when value <= 0M ->
                     reply.Reply(Error InvalidThreshold)
+                    return! loop state
                 | _ ->
-                    let! storageResult = 
-                        Storage.saveThreshold 
-                            (match userId with UserId id -> id) 
-                            threshold
-                    match storageResult with
+                    let id = match userId with UserId id -> id
+                    let! storageResult = Storage.saveThreshold id threshold
+                    match mapStorageResult storageResult with
                     | Ok _ ->
                         let newUserPLs =
                             match Map.tryFind userId state.UserPLs with
@@ -272,7 +259,6 @@ let createPLAgent () =
                 return! loop state
 
             | CalculateHistoricalPL (userId, startDate, endDate, reply) ->
-                // In a real implementation, this would fetch historical trades from storage
                 reply.Reply(Ok 0M)
                 return! loop state
         }

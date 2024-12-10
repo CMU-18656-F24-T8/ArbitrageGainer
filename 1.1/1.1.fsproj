@@ -22,6 +22,7 @@
     <Compile Include="RealtimeTrading\retrieveCrossTradedPair.fs" />
     <Compile Include="RealtimeTrading\RealtimeTrading.fs" />
     <Compile Include="RealtimeTrading\Service.fs" />
+    <Compile Include="Controller\PLCalculation.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
