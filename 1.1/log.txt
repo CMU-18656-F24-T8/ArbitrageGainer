@@ -1,0 +1,10 @@
+2024-12-08 18:19:18:273 - retrieveCrossTradedPairsHandler Start called
+2024-12-08 18:19:18:690 - retrieveCrossTradedPairsHandler End called
+2024-12-08 18:19:26:502 - Start calculating top opportunities called
+2024-12-08 18:19:26:570 - Finish calculating top opportunities called
+2024-12-08 18:19:34:467 - Starting realtime trading called
+2024-12-08 18:19:34:544 - Start calculating top opportunities called
+2024-12-08 18:19:34:686 - Finish calculating top opportunities called
+2024-12-08 18:19:40:790 - submitting order called
+2024-12-08 18:19:45:926 - submitting order called
+2024-12-08 18:19:52:882 - submitting order called
